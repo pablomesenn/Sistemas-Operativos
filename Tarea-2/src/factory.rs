@@ -1,44 +1,53 @@
-// Factory module, main module of the project managing the overall workflow
+use std::collections::VecDeque;
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
+
+use crate::product::Product;
 
 pub struct Factory {
-    name: String,
+    pub cutting_queue: VecDeque<Product>,
+    pub assembly_queue: VecDeque<Product>,
+    pub packaging_queue: VecDeque<Product>,
+    pub current_time: Instant,
 }
 
 impl Factory {
-    pub fn new(name: String) -> Self {
-        Factory { name }
-    }
-
-    pub fn operate(&self) {
-        let handle1 = thread::spawn(self.cut_stage());
-        let handle2 = thread::spawn(self.assemble_stage());
-        let handle3 = thread::spawn(self.pack_stage());    
-
-        // Esperar a que todos los hilos terminen
-        handle1.join().unwrap();
-        handle2.join().unwrap();
-        handle3.join().unwrap();
-    }
-
-    fn cut_stage(&self) {
-        for _i in 1..=5 {
-            println!("Cutting stage in factory: {}", self.name);
+    pub fn new() -> Self {
+        Factory {
+            cutting_queue: VecDeque::new(),
+            assembly_queue: VecDeque::new(),
+            packaging_queue: VecDeque::new(),
+            current_time: Instant::now(),
         }
     }
 
-    fn assemble_stage(&self) {
-        for _i in 1..=5 {
-            thread::sleep(Duration::from_millis(500));
-            println!("Assembling stage in factory: {}", self.name);
+    pub fn cutting_stage(&mut self) {
+        if let Some(mut p) = self.cutting_queue.pop_front() {
+            p.entry_cutting = Some(self.current_time.elapsed());
+            thread::sleep(Duration::from_secs(2));
+            p.exit_cutting = Some(self.current_time.elapsed());
+            self.assembly_queue.push_back(p);
         }
     }
 
-    fn pack_stage(&self) {
-        for _i in 1..=5 {
-            thread::sleep(Duration::from_millis(1500));
-            println!("Packing stage in factory: {}", self.name);
+    pub fn assembly_stage(&mut self) {
+        if let Some(mut p) = self.assembly_queue.pop_front() {
+            p.entry_assembly = Some(self.current_time.elapsed());
+            thread::sleep(Duration::from_secs(3));
+            p.exit_assembly = Some(self.current_time.elapsed());
+            self.packaging_queue.push_back(p);
+        }
+    }
+
+    pub fn packaging_stage(&mut self) {
+        if let Some(mut p) = self.packaging_queue.pop_front() {
+            p.entry_packaging = Some(self.current_time.elapsed());
+            thread::sleep(Duration::from_secs(1));
+            p.exit_packaging = Some(self.current_time.elapsed());
+            println!("✅ Product {:?} finished", p);
+            if let Some(turnaround) = p.turnaround_time() {
+                println!("   Turnaround time: {:?}", turnaround);
+            }
         }
     }
 }

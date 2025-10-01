@@ -1,36 +1,36 @@
-// Product module, for defining products and related functions
+use std::time::Duration;
 
-struct Producto {
-    id: u32,
-    nombre: String,
-    tiempo_llegada: Instant,
-    tiempo_entrada_corte: Option<Instant>,
-    tiempo_salida_corte: Option<Instant>,
-    tiempo_entrada_ensamblaje: Option<Instant>,
-    tiempo_salida_ensamblaje: Option<Instant>,
-    tiempo_entrada_empaque: Option<Instant>,
-    tiempo_salida_empaque: Option<Instant>,
+#[derive(Debug, Clone)]
+pub struct Product {
+    pub id: u32,
+    pub arrival_time: Option<Duration>,
+    pub entry_cutting: Option<Duration>,
+    pub exit_cutting: Option<Duration>,
+    pub entry_assembly: Option<Duration>,
+    pub exit_assembly: Option<Duration>,
+    pub entry_packaging: Option<Duration>,
+    pub exit_packaging: Option<Duration>,
 }
 
-impl Producto {
-    fn new(id: u32, nombre: String) -> Self {
-        Producto {
+impl Product {
+    pub fn new(id: u32) -> Self {
+        Product {
             id,
-            nombre,
-            tiempo_llegada: Instant::now(),
-            tiempo_entrada_corte: None,
-            tiempo_salida_corte: None,
-            tiempo_entrada_ensamblaje: None,
-            tiempo_salida_ensamblaje: None,
-            tiempo_entrada_empaque: None,
-            tiempo_salida_empaque: None,
+            arrival_time: None,
+            entry_cutting: None,
+            exit_cutting: None,
+            entry_assembly: None,
+            exit_assembly: None,
+            entry_packaging: None,
+            exit_packaging: None,
         }
     }
 
-    fn display(&self) {
-        println!(
-            "Product ID: {}, Name: {}",
-            self.id, self.nombre
-        );
+    pub fn turnaround_time(&self) -> Option<Duration> {
+        if let (Some(entry), Some(exit)) = (self.arrival_time, self.exit_packaging) {
+            Some(exit - entry)
+        } else {
+            None
+        }
     }
 }
