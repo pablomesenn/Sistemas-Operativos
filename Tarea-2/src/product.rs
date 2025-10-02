@@ -1,9 +1,9 @@
 use std::time::Duration;
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Product {
     pub id: u32,
-    pub arrival_time: Option<Duration>,
+    pub arrival_time: Duration,
     pub entry_cutting: Option<Duration>,
     pub exit_cutting: Option<Duration>,
     pub entry_assembly: Option<Duration>,
@@ -13,10 +13,10 @@ pub struct Product {
 }
 
 impl Product {
-    pub fn new(id: u32) -> Self {
+    pub fn new(id: u32, now: Duration) -> Self {
         Product {
             id,
-            arrival_time: None,
+            arrival_time: now,
             entry_cutting: None,
             exit_cutting: None,
             entry_assembly: None,
@@ -27,10 +27,6 @@ impl Product {
     }
 
     pub fn turnaround_time(&self) -> Option<Duration> {
-        if let (Some(entry), Some(exit)) = (self.arrival_time, self.exit_packaging) {
-            Some(exit - entry)
-        } else {
-            None
-        }
+        self.exit_packaging.map(|exit| exit - self.arrival_time)
     }
 }
