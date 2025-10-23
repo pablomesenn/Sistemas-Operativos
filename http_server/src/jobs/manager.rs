@@ -1,359 +1,442 @@
-//! # Job Manager
+//! # Gestor Central de Jobs
+//! src/jobs/manager.rs
 //!
-//! Coordina la cola de jobs, su ejecución y almacenamiento.
+//! Coordina la ejecución de jobs: encolado, workers, timeouts, cancelación.
 
-use crate::jobs::job::{Job, JobTask, JobPriority, JobStatus};
+use crate::jobs::types::{JobMetadata, JobPriority, JobType};
+use crate::jobs::queue::JobQueue;
+use crate::jobs::storage::JobStorage;
+use crate::http::{Request, Response};
 use crate::commands;
-use std::collections::{HashMap, VecDeque};
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
-/// Manager que coordina todos los jobs
+/// Configuración del Job Manager
+#[derive(Clone)]
+pub struct JobManagerConfig {
+    /// Capacidad máxima de cada cola
+    pub queue_capacity: usize,
+    
+    /// Timeout para jobs CPU-bound (milisegundos)
+    pub cpu_timeout_ms: u64,
+    
+    /// Timeout para jobs IO-bound (milisegundos)
+    pub io_timeout_ms: u64,
+    
+    /// Número de workers para CPU-bound
+    pub cpu_workers: usize,
+    
+    /// Número de workers para IO-bound
+    pub io_workers: usize,
+    
+    /// Ruta del archivo de persistencia
+    pub storage_path: String,
+}
+
+impl Default for JobManagerConfig {
+    fn default() -> Self {
+        Self {
+            queue_capacity: 1000,
+            cpu_timeout_ms: 60_000,  // 60 segundos
+            io_timeout_ms: 120_000,  // 120 segundos
+            cpu_workers: 4,
+            io_workers: 4,
+            storage_path: "./data/jobs.json".to_string(),
+        }
+    }
+}
+
+/// Gestor central de jobs
 pub struct JobManager {
-    /// Almacenamiento de todos los jobs (por ID)
-    jobs: Arc<Mutex<HashMap<String, Job>>>,
+    /// Configuración
+    config: JobManagerConfig,
     
-    /// Cola de jobs pendientes (por prioridad y FIFO)
-    queue: Arc<Mutex<VecDeque<String>>>,
+    /// Colas por tipo de job
+    cpu_queue: JobQueue,
+    io_queue: JobQueue,
+    basic_queue: JobQueue,
     
-    /// Número de workers activos procesando jobs
-    active_workers: Arc<Mutex<usize>>,
+    /// Storage persistente
+    storage: JobStorage,
     
-    /// Máximo de workers concurrentes
-    max_workers: usize,
-    
-    /// Flag para shutdown graceful
-    shutdown: Arc<Mutex<bool>>,
+    /// Jobs actualmente en ejecución (job_id -> thread_handle)
+    running_jobs: Arc<Mutex<HashMap<String, ()>>>,
 }
 
 impl JobManager {
     /// Crea un nuevo Job Manager
-    /// 
-    /// # Argumentos
-    /// - `max_workers`: Máximo de jobs ejecutándose simultáneamente
-    pub fn new(max_workers: usize) -> Self {
-        Self {
-            jobs: Arc::new(Mutex::new(HashMap::new())),
-            queue: Arc::new(Mutex::new(VecDeque::new())),
-            active_workers: Arc::new(Mutex::new(0)),
-            max_workers,
-            shutdown: Arc::new(Mutex::new(false)),
-        }
-    }
-    
-    /// Inicia el procesamiento de jobs en background
-    pub fn start(&self) {
-        let jobs = Arc::clone(&self.jobs);
-        let queue = Arc::clone(&self.queue);
-        let active_workers = Arc::clone(&self.active_workers);
-        let max_workers = self.max_workers;
-        let shutdown = Arc::clone(&self.shutdown);
+    pub fn new(config: JobManagerConfig) -> Self {
+        // Crear directorio data/ si no existe
+        let _ = std::fs::create_dir_all("./data");
         
-        thread::spawn(move || {
-            loop {
-                // Verificar si debemos apagar
-                {
-                    let should_shutdown = *shutdown.lock().unwrap();
-                    if should_shutdown {
-                        println!("🛑 Job Manager shutting down...");
-                        break;
-                    }
-                }
-                
-                // Verificar si hay espacio para más workers
-                let current_workers = *active_workers.lock().unwrap();
-                if current_workers >= max_workers {
-                    thread::sleep(Duration::from_millis(100));
-                    continue;
-                }
-                
-                // Obtener siguiente job de la cola
-                let job_id = {
-                    let mut q = queue.lock().unwrap();
-                    q.pop_front()
-                };
-                
-                if let Some(job_id) = job_id {
-                    // Incrementar contador de workers
-                    {
-                        let mut workers = active_workers.lock().unwrap();
-                        *workers += 1;
-                    }
-                    
-                    // Clonar referencias para el thread
-                    let jobs_clone = Arc::clone(&jobs);
-                    let active_workers_clone = Arc::clone(&active_workers);
-                    
-                    // Spawn thread para ejecutar el job
-                    thread::spawn(move || {
-                        Self::execute_job(&job_id, &jobs_clone);
-                        
-                        // Decrementar contador al terminar
-                        let mut workers = active_workers_clone.lock().unwrap();
-                        *workers -= 1;
-                    });
-                } else {
-                    // No hay jobs, esperar un poco
-                    thread::sleep(Duration::from_millis(100));
-                }
-            }
-        });
-    }
-    
-    /// Encola un nuevo job
-    /// 
-    /// # Retorna
-    /// El ID del job creado
-    pub fn submit(&self, task: JobTask, priority: JobPriority) -> String {
-        let job = Job::new(task, priority);
-        let job_id = job.id().to_string();
+        let storage = JobStorage::new(&config.storage_path)
+            .expect("Failed to initialize job storage");
         
-        // Guardar job
-        {
-            let mut jobs = self.jobs.lock().unwrap();
-            jobs.insert(job_id.clone(), job);
-        }
-        
-        // Agregar a la cola
-        {
-            let mut queue = self.queue.lock().unwrap();
-            
-            // Insertar según prioridad
-            // High: al frente
-            // Normal: en medio
-            // Low: al final
-            match priority {
-                JobPriority::High => queue.push_front(job_id.clone()),
-                JobPriority::Low => queue.push_back(job_id.clone()),
-                JobPriority::Normal => {
-                    // Insertar después de los High pero antes de los Low
-                    let pos = queue.iter().position(|id| {
-                        if let Some(j) = self.jobs.lock().unwrap().get(id) {
-                            j.priority() < JobPriority::Normal
-                        } else {
-                            false
-                        }
-                    }).unwrap_or(queue.len());
-                    
-                    queue.insert(pos, job_id.clone());
-                }
-            }
-        }
-        
-        println!("📝 Job {} enqueued (priority: {})", &job_id[..8], priority.as_str());
-        
-        job_id
-    }
-    
-    /// Obtiene el estado de un job
-    pub fn get_status(&self, job_id: &str) -> Option<String> {
-        let jobs = self.jobs.lock().unwrap();
-        jobs.get(job_id).map(|job| job.to_status_json())
-    }
-    
-    /// Obtiene el resultado de un job
-    pub fn get_result(&self, job_id: &str) -> Option<String> {
-        let jobs = self.jobs.lock().unwrap();
-        jobs.get(job_id).map(|job| job.to_result_json())
-    }
-    
-    /// Cancela un job
-    pub fn cancel(&self, job_id: &str) -> bool {
-        let mut jobs = self.jobs.lock().unwrap();
-        
-        if let Some(job) = jobs.get_mut(job_id) {
-            let status = job.status();
-            
-            match status {
-                JobStatus::Queued => {
-                    // Remover de la cola
-                    let mut queue = self.queue.lock().unwrap();
-                    if let Some(pos) = queue.iter().position(|id| id == job_id) {
-                        queue.remove(pos);
-                    }
-                    job.mark_canceled();
-                    println!("❌ Job {} canceled (was queued)", &job_id[..8]);
-                    true
-                }
-                JobStatus::Running => {
-                    // No podemos cancelar jobs en ejecución sin soporte de cancelación
-                    println!("⚠️  Job {} cannot be canceled (already running)", &job_id[..8]);
-                    false
-                }
-                _ => {
-                    println!("⚠️  Job {} cannot be canceled (status: {})", &job_id[..8], status.as_str());
-                    false
-                }
-            }
-        } else {
-            false
-        }
-    }
-    
-    /// Obtiene métricas del Job Manager
-    pub fn get_metrics(&self) -> String {
-        let jobs = self.jobs.lock().unwrap();
-        let queue = self.queue.lock().unwrap();
-        let active_workers = *self.active_workers.lock().unwrap();
-        
-        // Contar jobs por estado
-        let mut queued = 0;
-        let mut running = 0;
-        let mut done = 0;
-        let mut error = 0;
-        let mut canceled = 0;
-        
-        for job in jobs.values() {
-            match job.status() {
-                JobStatus::Queued => queued += 1,
-                JobStatus::Running => running += 1,
-                JobStatus::Done => done += 1,
-                JobStatus::Error => error += 1,
-                JobStatus::Canceled => canceled += 1,
-            }
-        }
-        
-        format!(
-            r#"{{"total_jobs": {}, "queued": {}, "running": {}, "done": {}, "error": {}, "canceled": {}, "queue_size": {}, "active_workers": {}, "max_workers": {}}}"#,
-            jobs.len(), queued, running, done, error, canceled,
-            queue.len(), active_workers, self.max_workers
-        )
-    }
-    
-    /// Ejecuta un job (llamado desde un worker thread)
-    fn execute_job(job_id: &str, jobs: &Arc<Mutex<HashMap<String, Job>>>) {
-        println!("⚙️  Executing job {}", &job_id[..8]);
-        
-        // Obtener el job y marcarlo como running
-        let task = {
-            let mut jobs_guard = jobs.lock().unwrap();
-            if let Some(job) = jobs_guard.get_mut(job_id) {
-                job.mark_started();
-                job.task().clone()
-            } else {
-                println!("❌ Job {} not found!", job_id);
-                return;
-            }
+        let manager = Self {
+            config: config.clone(),
+            cpu_queue: JobQueue::new(config.queue_capacity),
+            io_queue: JobQueue::new(config.queue_capacity),
+            basic_queue: JobQueue::new(config.queue_capacity),
+            storage,
+            running_jobs: Arc::new(Mutex::new(HashMap::new())),
         };
         
-        // Ejecutar la tarea según su tipo
-        let result = Self::execute_task(&task);
+        // Iniciar workers
+        manager.spawn_workers();
         
-        // Actualizar el job con el resultado
-        {
-            let mut jobs_guard = jobs.lock().unwrap();
-            if let Some(job) = jobs_guard.get_mut(job_id) {
-                match result {
-                    Ok(json) => {
-                        job.mark_done(json);
-                        println!("✅ Job {} completed", &job_id[..8]);
-                    }
-                    Err(error) => {
-                        job.mark_error(error);
-                        println!("❌ Job {} failed", &job_id[..8]);
-                    }
-                }
-            }
+        manager
+    }
+    
+    /// Inicia los workers para procesar jobs
+    fn spawn_workers(&self) {
+        // Workers CPU-bound
+        for i in 0..self.config.cpu_workers {
+            let queue = self.cpu_queue.clone();
+            let storage = self.storage.clone();
+            let running = Arc::clone(&self.running_jobs);
+            let timeout_ms = self.config.cpu_timeout_ms;
+            
+            thread::spawn(move || {
+                Self::worker_loop(
+                    format!("CPU-{}", i),
+                    queue,
+                    storage,
+                    running,
+                    timeout_ms,
+                )
+            });
+        }
+        
+        // Workers IO-bound
+        for i in 0..self.config.io_workers {
+            let queue = self.io_queue.clone();
+            let storage = self.storage.clone();
+            let running = Arc::clone(&self.running_jobs);
+            let timeout_ms = self.config.io_timeout_ms;
+            
+            thread::spawn(move || {
+                Self::worker_loop(
+                    format!("IO-{}", i),
+                    queue,
+                    storage,
+                    running,
+                    timeout_ms,
+                )
+            });
+        }
+        
+        // Workers básicos
+        for i in 0..2 {
+            let queue = self.basic_queue.clone();
+            let storage = self.storage.clone();
+            let running = Arc::clone(&self.running_jobs);
+            let timeout_ms = self.config.cpu_timeout_ms;
+            
+            thread::spawn(move || {
+                Self::worker_loop(
+                    format!("Basic-{}", i),
+                    queue,
+                    storage,
+                    running,
+                    timeout_ms,
+                )
+            });
         }
     }
     
-    /// Ejecuta una tarea específica
-    fn execute_task(task: &JobTask) -> Result<String, String> {
-        // Crear un Request fake para pasar a los handlers
-        use crate::http::Request;
+    /// Loop principal del worker
+    fn worker_loop(
+        name: String,
+        queue: JobQueue,
+        storage: JobStorage,
+        running_jobs: Arc<Mutex<HashMap<String, ()>>>,
+        timeout_ms: u64,
+    ) {
+        println!("🔧 Worker {} started", name);
         
-        let request_str = match task {
-            JobTask::IsPrime { n } => format!("GET /isprime?n={} HTTP/1.0\r\n\r\n", n),
-            JobTask::Factor { n } => format!("GET /factor?n={} HTTP/1.0\r\n\r\n", n),
-            JobTask::Pi { digits } => format!("GET /pi?digits={} HTTP/1.0\r\n\r\n", digits),
-            JobTask::Mandelbrot { width, height, max_iter } => {
-                format!("GET /mandelbrot?width={}&height={}&max_iter={} HTTP/1.0\r\n\r\n", 
-                       width, height, max_iter)
+        loop {
+            // Esperar por un job
+            let mut job = queue.dequeue();
+            
+            println!("🔨 Worker {} picked up job: {}", name, job.id);
+            
+            // Marcar como running
+            job.mark_running();
+            {
+                let mut running = running_jobs.lock().unwrap();
+                running.insert(job.id.clone(), ());
             }
-            JobTask::MatrixMul { size, seed } => {
-                format!("GET /matrixmul?size={}&seed={} HTTP/1.0\r\n\r\n", size, seed)
+            let _ = storage.save(&job);
+            
+            // Ejecutar el job
+            let result = Self::execute_job(&job, timeout_ms);
+            
+            // Actualizar con el resultado
+            match result {
+                Ok(response_body) => {
+                    job.mark_done(response_body);
+                    println!("✅ Worker {} completed job: {}", name, job.id);
+                }
+                Err(error) => {
+                    if error.contains("timeout") {
+                        job.mark_timeout();
+                        println!("⏱️  Worker {} timeout job: {}", name, job.id);
+                    } else {
+                        job.mark_error(error.clone());
+                        println!("❌ Worker {} failed job: {} - {}", name, job.id, error);
+                    }
+                }
             }
-            JobTask::SortFile { name, algo } => {
-                format!("GET /sortfile?name={}&algo={} HTTP/1.0\r\n\r\n", name, algo)
+            
+            // Remover de running
+            {
+                let mut running = running_jobs.lock().unwrap();
+                running.remove(&job.id);
             }
-            JobTask::WordCount { name } => {
-                format!("GET /wordcount?name={} HTTP/1.0\r\n\r\n", name)
-            }
-            JobTask::Grep { name, pattern } => {
-                format!("GET /grep?name={}&pattern={} HTTP/1.0\r\n\r\n", name, pattern)
-            }
-            JobTask::Compress { name, codec } => {
-                format!("GET /compress?name={}&codec={} HTTP/1.0\r\n\r\n", name, codec)
-            }
-            JobTask::HashFile { name, algo } => {
-                format!("GET /hashfile?name={}&algo={} HTTP/1.0\r\n\r\n", name, algo)
-            }
-        };
+            
+            // Guardar estado final
+            let _ = storage.save(&job);
+        }
+    }
+    
+    /// Ejecuta un job específico
+    fn execute_job(job: &JobMetadata, timeout_ms: u64) -> Result<String, String> {
+        // Parsear los parámetros
+        let params_json: serde_json::Value = serde_json::from_str(&job.params)
+            .map_err(|e| format!("Invalid params JSON: {}", e))?;
+        
+        // Construir un Request simulado con los parámetros
+        let query_string = Self::json_to_query_string(&params_json);
+        let request_str = format!(
+            "GET /{}?{} HTTP/1.0\r\n\r\n",
+            Self::job_type_to_path(&job.job_type),
+            query_string
+        );
         
         let request = Request::parse(request_str.as_bytes())
             .map_err(|e| format!("Failed to parse request: {}", e))?;
         
-        // Llamar al handler apropiado
-        let response = match task {
-            JobTask::IsPrime { .. } => commands::isprime_handler(&request),
-            JobTask::Factor { .. } => commands::factor_handler(&request),
-            JobTask::Pi { .. } => commands::pi_handler(&request),
-            JobTask::Mandelbrot { .. } => commands::mandelbrot_handler(&request),
-            JobTask::MatrixMul { .. } => commands::matrixmul_handler(&request),
-            JobTask::SortFile { .. } => commands::sortfile_handler(&request),
-            JobTask::WordCount { .. } => commands::wordcount_handler(&request),
-            JobTask::Grep { .. } => commands::grep_handler(&request),
-            JobTask::Compress { .. } => commands::compress_handler(&request),
-            JobTask::HashFile { .. } => commands::hashfile_handler(&request),
-        };
+        // Clonar job_type para moverlo al thread
+        let job_type = job.job_type.clone();
         
-        // Extraer el body del response
-        let body = String::from_utf8(response.body().to_vec())
-            .map_err(|e| format!("Failed to convert response: {}", e))?;
+        // Ejecutar con timeout
+        let result = Arc::new(Mutex::new(None));
+        let result_clone = Arc::clone(&result);
         
-        // Verificar si fue exitoso
-        if response.status().is_success() {
-            Ok(body)
+        let handle = thread::spawn(move || {
+            let response = Self::dispatch_command(&job_type, &request);
+            let body = String::from_utf8_lossy(response.body()).to_string();
+            let mut res = result_clone.lock().unwrap();
+            *res = Some(body);
+        });
+        
+        // Esperar con timeout
+        let timeout_duration = Duration::from_millis(timeout_ms);
+        let start = std::time::Instant::now();
+        
+        while start.elapsed() < timeout_duration {
+            if handle.is_finished() {
+                let _ = handle.join();
+                let res = result.lock().unwrap();
+                return res.clone().ok_or_else(|| "No result".to_string());
+            }
+            thread::sleep(Duration::from_millis(100));
+        }
+        
+        Err("Job exceeded timeout".to_string())
+    }
+    
+    /// Convierte JSON params a query string
+    fn json_to_query_string(json: &serde_json::Value) -> String {
+        if let Some(obj) = json.as_object() {
+            obj.iter()
+                .map(|(k, v)| {
+                    let val = match v {
+                        serde_json::Value::String(s) => s.clone(),
+                        serde_json::Value::Number(n) => n.to_string(),
+                        serde_json::Value::Bool(b) => b.to_string(),
+                        _ => v.to_string(),
+                    };
+                    format!("{}={}", k, val)
+                })
+                .collect::<Vec<_>>()
+                .join("&")
         } else {
-            Err(body)
+            String::new()
         }
     }
     
-    /// Detiene el Job Manager
-    pub fn shutdown(&self) {
-        let mut shutdown = self.shutdown.lock().unwrap();
-        *shutdown = true;
+    /// Convierte JobType a path
+    fn job_type_to_path(job_type: &JobType) -> &'static str {
+        match job_type {
+            JobType::IsPrime => "isprime",
+            JobType::Factor => "factor",
+            JobType::Pi => "pi",
+            JobType::Mandelbrot => "mandelbrot",
+            JobType::MatrixMul => "matrixmul",
+            JobType::SortFile => "sortfile",
+            JobType::WordCount => "wordcount",
+            JobType::Grep => "grep",
+            JobType::Compress => "compress",
+            JobType::HashFile => "hashfile",
+            JobType::Fibonacci => "fibonacci",
+            JobType::Simulate => "simulate",
+        }
+    }
+    
+    /// Despacha a la función handler correcta
+    fn dispatch_command(job_type: &JobType, request: &Request) -> Response {
+        match job_type {
+            JobType::IsPrime => commands::isprime_handler(request),
+            JobType::Factor => commands::factor_handler(request),
+            JobType::Pi => commands::pi_handler(request),
+            JobType::Mandelbrot => commands::mandelbrot_handler(request),
+            JobType::MatrixMul => commands::matrixmul_handler(request),
+            JobType::SortFile => commands::sortfile_handler(request),
+            JobType::WordCount => commands::wordcount_handler(request),
+            JobType::Grep => commands::grep_handler(request),
+            JobType::Compress => commands::compress_handler(request),
+            JobType::HashFile => commands::hashfile_handler(request),
+            JobType::Fibonacci => commands::fibonacci_handler(request),
+            JobType::Simulate => commands::simulate_handler(request),
+        }
+    }
+    
+    /// Encola un nuevo job
+    pub fn submit_job(
+        &self,
+        job_type: JobType,
+        params: String,
+        priority: JobPriority,
+    ) -> Result<String, String> {
+        // Generar ID único
+        let job_id = self.generate_job_id();
+        
+        // Crear metadata
+        let metadata = JobMetadata::new(job_id.clone(), job_type, params, priority);
+        
+        // Seleccionar cola
+        let queue = if job_type.is_cpu_bound() {
+            &self.cpu_queue
+        } else if job_type.is_io_bound() {
+            &self.io_queue
+        } else {
+            &self.basic_queue
+        };
+        
+        // Encolar
+        queue.enqueue(metadata.clone())?;
+        
+        // Guardar en storage
+        self.storage.save(&metadata)
+            .map_err(|e| format!("Storage error: {}", e))?;
+        
+        Ok(job_id)
+    }
+    
+    /// Obtiene el estado de un job
+    pub fn get_job_status(&self, job_id: &str) -> Option<JobMetadata> {
+        self.storage.get(job_id)
+    }
+    
+    /// Cancela un job
+    pub fn cancel_job(&self, job_id: &str) -> Result<(), String> {
+        // Buscar en las colas primero
+        let removed = self.cpu_queue.remove_by_id(job_id)
+            .or_else(|| self.io_queue.remove_by_id(job_id))
+            .or_else(|| self.basic_queue.remove_by_id(job_id));
+        
+        if let Some(mut job) = removed {
+            // Estaba en cola, marcarlo cancelado
+            job.mark_canceled();
+            self.storage.save(&job)
+                .map_err(|e| format!("Storage error: {}", e))?;
+            return Ok(());
+        }
+        
+        // Si no está en cola, verificar si está running
+        let is_running = {
+            let running = self.running_jobs.lock().unwrap();
+            running.contains_key(job_id)
+        };
+        
+        if is_running {
+            return Err("Job is currently running and cannot be canceled".to_string());
+        }
+        
+        // Si no está ni en cola ni running, verificar si ya terminó
+        if let Some(job) = self.storage.get(job_id) {
+            if job.is_terminal() {
+                return Err("Job already finished".to_string());
+            }
+        }
+        
+        Err("Job not found".to_string())
+    }
+    
+    /// Genera un ID único para el job
+    fn generate_job_id(&self) -> String {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+        
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        
+        let mut hasher = DefaultHasher::new();
+        now.hash(&mut hasher);
+        thread::current().id().hash(&mut hasher);
+        
+        format!("job-{:016x}", hasher.finish())
+    }
+    
+    /// Obtiene estadísticas de las colas
+    pub fn get_queue_stats(&self) -> serde_json::Value {
+        let cpu_stats = self.cpu_queue.stats();
+        let io_stats = self.io_queue.stats();
+        let basic_stats = self.basic_queue.stats();
+        
+        let running_count = {
+            let running = self.running_jobs.lock().unwrap();
+            running.len()
+        };
+        
+        serde_json::json!({
+            "cpu_queue": {
+                "total": cpu_stats.total,
+                "capacity": cpu_stats.capacity,
+                "low": cpu_stats.low_priority,
+                "normal": cpu_stats.normal_priority,
+                "high": cpu_stats.high_priority,
+            },
+            "io_queue": {
+                "total": io_stats.total,
+                "capacity": io_stats.capacity,
+                "low": io_stats.low_priority,
+                "normal": io_stats.normal_priority,
+                "high": io_stats.high_priority,
+            },
+            "basic_queue": {
+                "total": basic_stats.total,
+                "capacity": basic_stats.capacity,
+            },
+            "running_jobs": running_count,
+        })
     }
 }
 
-impl Drop for JobManager {
-    fn drop(&mut self) {
-        self.shutdown();
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    
-    #[test]
-    fn test_job_manager_creation() {
-        let manager = JobManager::new(4);
-        let metrics = manager.get_metrics();
-        assert!(metrics.contains("\"total_jobs\": 0"));
-    }
-    
-    #[test]
-    fn test_job_submit() {
-        let manager = JobManager::new(4);
-        let task = JobTask::IsPrime { n: 97 };
-        let job_id = manager.submit(task, JobPriority::Normal);
-        
-        assert!(job_id.len() > 0);
-        
-        // Verificar que el job existe
-        let status = manager.get_status(&job_id);
-        assert!(status.is_some());
+impl Clone for JobManager {
+    fn clone(&self) -> Self {
+        Self {
+            config: self.config.clone(),
+            cpu_queue: self.cpu_queue.clone(),
+            io_queue: self.io_queue.clone(),
+            basic_queue: self.basic_queue.clone(),
+            storage: self.storage.clone(),
+            running_jobs: Arc::clone(&self.running_jobs),
+        }
     }
 }

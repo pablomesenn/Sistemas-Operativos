@@ -1,4 +1,5 @@
 //! # Comandos CPU-bound
+//! src/commands/cpu_bound.rs
 //!
 //! Comandos que requieren procesamiento intensivo de CPU:
 //! - /isprime: Verificación de primalidad

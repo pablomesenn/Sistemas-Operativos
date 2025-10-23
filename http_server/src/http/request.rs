@@ -1,4 +1,5 @@
 //! # Parsing de Requests HTTP/1.0
+//! src/http/request.rs
 //!
 //! Este módulo implementa un parser HTTP/1.0 desde cero.
 //!

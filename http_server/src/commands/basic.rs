@@ -1,4 +1,5 @@
 //! # Comandos Básicos
+//! src/commands/basic.rs
 //!
 //! Implementación de los comandos básicos del servidor:
 //! - /status: Estado del servidor

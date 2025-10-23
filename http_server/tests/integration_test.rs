@@ -1,4 +1,5 @@
 //! Tests de integración para el servidor HTTP
+//! src/tests/integration_test.rs
 //!
 //! IMPORTANTE: Estos tests requieren que el servidor esté corriendo.
 //! 

@@ -1,4 +1,5 @@
 //! # HTTP Server
+//! src/lib.rs
 //!
 //! Servidor HTTP/1.0 concurrente implementado desde cero para demostrar
 //! conceptos de sistemas operativos: concurrencia, sincronización, 
@@ -34,6 +35,7 @@ pub mod server;
 pub mod router;
 pub mod commands;
 pub mod metrics;
+pub mod jobs;
 
 // Módulos que agregaremos después (comentados por ahora)
 // pub mod router;

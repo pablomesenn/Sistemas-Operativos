@@ -1,5 +1,6 @@
 //! # Configuración del Servidor
-//!
+//! src/config.rs
+//! 
 //! Este módulo define la configuración del servidor HTTP.
 //! La configuración puede venir de:
 //! - Valores por defecto

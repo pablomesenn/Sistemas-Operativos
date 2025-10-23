@@ -1,17 +1,21 @@
 //! # Sistema de Jobs
+//! src/jobs/mod.rs
 //!
-//! Implementa un sistema asíncrono para ejecutar tareas largas
-//! sin bloquear las conexiones HTTP.
-//!
-//! ## Endpoints
-//!
-//! - `/jobs/submit?task=TASK&params...` - Encolar job
-//! - `/jobs/status?id=JOBID` - Consultar estado
-//! - `/jobs/result?id=JOBID` - Obtener resultado
-//! - `/jobs/cancel?id=JOBID` - Cancelar job
+//! Implementa el sistema de trabajos asíncronos para tareas largas.
+//! 
+//! ## Componentes
+//! 
+//! - **types**: Tipos y estructuras fundamentales
+//! - **manager**: Gestor central de jobs
+//! - **queue**: Cola de prioridad para jobs pendientes
+//! - **storage**: Persistencia efímera de metadatos
+//! - **handlers**: Endpoints HTTP para el sistema de jobs
 
-pub mod job;
+pub mod types;
 pub mod manager;
+pub mod queue;
+pub mod storage;
+pub mod handlers;
 
-pub use job::{Job, JobTask, JobPriority, JobStatus};
+pub use types::{JobStatus, JobPriority, JobType, JobMetadata};
 pub use manager::JobManager;

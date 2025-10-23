@@ -1,4 +1,5 @@
 //! # Sistema de Métricas
+//! src/metrics/mod.rs
 //!
 //! Este módulo implementa la recolección y agregación de métricas del servidor:
 //! - Contadores de requests

@@ -1,4 +1,5 @@
 //! # Comandos del Servidor
+//! src/commands/mod.rs
 //!
 //! Este módulo contiene la implementación de todos los comandos
 //! que el servidor puede ejecutar.

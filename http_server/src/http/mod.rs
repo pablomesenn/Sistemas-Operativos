@@ -1,4 +1,5 @@
 //! # Módulo HTTP
+//! src/http/mod.rs
 //!
 //! Este módulo implementa el protocolo HTTP/1.0 desde cero, sin usar
 //! librerías de alto nivel. Incluye:

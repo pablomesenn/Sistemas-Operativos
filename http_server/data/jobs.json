@@ -1,0 +1,16 @@
+{
+  "job-a42effd44f3966a6": {
+    "id": "job-a42effd44f3966a6",
+    "job_type": "isprime",
+    "status": "done",
+    "priority": "high",
+    "params": "{\"n\":\"999983\"}",
+    "created_at": 1761254017,
+    "started_at": 1761254017,
+    "finished_at": 1761254017,
+    "progress": 100,
+    "eta_ms": null,
+    "result": "{\"n\": 999983, \"is_prime\": true, \"method\": \"miller-rabin\", \"elapsed_ms\": 0}",
+    "error": null
+  }
+}

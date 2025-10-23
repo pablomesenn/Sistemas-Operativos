@@ -1,13 +1,15 @@
 //! # Servidor TCP Concurrente
+//! src/server/tcp.rs
 //!
-//! Implementación del servidor TCP que maneja múltiples conexiones simultáneas
-//! usando threads. Cada conexión se procesa en su propio thread.
+//! Implementacion del servidor TCP que maneja mulltiples conexiones simultaneas
+//! usando threads. Cada conexiÃ³n se procesa en su propio thread.
 
 use crate::config::Config;
 use crate::http::{Request, Response, StatusCode};
 use crate::router::Router;
 use crate::commands;
 use crate::metrics::MetricsCollector;
+use crate::jobs::{JobManager, handlers as job_handlers};
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::sync::Arc;
@@ -19,6 +21,7 @@ pub struct Server {
     config: Config,
     router: Arc<Router>,
     metrics: Arc<MetricsCollector>,
+    job_manager: Arc<JobManager>,
     listener: Option<TcpListener>,
 }
 
@@ -26,7 +29,7 @@ impl Server {
     pub fn new(config: Config) -> Self {
         let mut router = Router::new();
         
-        // Comandos básicos
+        // Comandos bÃ¡sicos
         router.register("/status", commands::status_handler);
         router.register("/fibonacci", commands::fibonacci_handler);
         router.register("/reverse", commands::reverse_handler);
@@ -55,23 +58,27 @@ impl Server {
         router.register("/compress", commands::compress_handler);
         router.register("/hashfile", commands::hashfile_handler);
         
-        // Nota: /metrics se manejará especialmente en handle_connection_static
+        // Nota: /metrics y /jobs/* se manejarán especialmente en handle_connection_static
+        
+        // Inicializar Job Manager
+        let job_manager = JobManager::new(crate::jobs::manager::JobManagerConfig::default());
         
         Self {
             config,
             router: Arc::new(router),
             metrics: Arc::new(MetricsCollector::new()),
+            job_manager: Arc::new(job_manager),
             listener: None,
         }
     }
     
     pub fn run(&mut self) -> std::io::Result<()> {
         let address = self.config.address();
-        println!("🚀 Iniciando servidor en {}", address);
+        println!("[*] Iniciando servidor en {}", address);
         
         let listener = TcpListener::bind(&address)?;
-        println!("✅ Servidor escuchando en {}", address);
-        println!("⚡ Modo concurrente: un thread por conexión\n");
+        println!("[+] Servidor escuchando en {}", address);
+        println!("[*] Modo concurrente: un thread por conexiÃ³n\n");
         
         self.listener = Some(listener);
         let listener = self.listener.as_ref().unwrap();
@@ -81,26 +88,27 @@ impl Server {
                 Ok(stream) => {
                     let router = Arc::clone(&self.router);
                     let metrics = Arc::clone(&self.metrics);
+                    let job_manager = Arc::clone(&self.job_manager);
                     
                     let peer_addr = stream.peer_addr()
                         .map(|addr| addr.to_string())
                         .unwrap_or_else(|_| "unknown".to_string());
                     
-                    println!("📥 Nueva conexión desde: {} (spawning thread)", peer_addr);
+                    println!("ðŸ“¥ Nueva conexiÃ³n desde: {} (spawning thread)", peer_addr);
                     
                     // Incrementar contador de threads activos
                     metrics.increment_active_threads();
                     
                     thread::spawn(move || {
-                        if let Err(e) = Self::handle_connection_static(stream, router, metrics.clone()) {
-                            eprintln!("   ❌ Error en thread: {}", e);
+                        if let Err(e) = Self::handle_connection_static(stream, router, metrics.clone(), job_manager) {
+                            eprintln!("   âŒ Error en thread: {}", e);
                         }
                         // Decrementar al terminar
                         metrics.decrement_active_threads();
                     });
                 }
                 Err(e) => {
-                    eprintln!("❌ Error al aceptar conexión: {}", e);
+                    eprintln!("âŒ Error al aceptar conexiÃ³n: {}", e);
                 }
             }
         }
@@ -111,11 +119,12 @@ impl Server {
     fn handle_connection_static(
         mut stream: TcpStream, 
         router: Arc<Router>,
-        metrics: Arc<MetricsCollector>
+        metrics: Arc<MetricsCollector>,
+        job_manager: Arc<JobManager>
     ) -> std::io::Result<()> {
         let start = Instant::now();
         
-        // Generar Request ID único
+        // Generar Request ID Ãºnico
         use std::collections::hash_map::DefaultHasher;
         use std::hash::{Hash, Hasher};
         
@@ -129,21 +138,34 @@ impl Server {
         let bytes_read = stream.read(&mut buffer)?;
         
         if bytes_read == 0 {
-            println!("   ⚠️  Conexión cerrada");
+            println!("   âš ï¸  ConexiÃ³n cerrada");
             return Ok(());
         }
         
-        println!("   📨 {} bytes [req_id: {}]", bytes_read, &request_id[..8]);
+        println!("   ðŸ“¨ {} bytes [req_id: {}]", bytes_read, &request_id[..8]);
         
         let (response, path) = match Request::parse(&buffer[..bytes_read]) {
             Ok(request) => {
                 let path = request.path().to_string();
                 println!("   ✅ {} {}", request.method().as_str(), path);
                 
-                // Manejar /metrics especialmente
+                // Manejar rutas especiales
                 let response = if path == "/metrics" {
                     let json = metrics.get_metrics_json();
                     Response::json(&json)
+                } else if path.starts_with("/jobs/") {
+                    // Despachar a handlers de jobs
+                    if path == "/jobs/submit" {
+                        job_handlers::submit_handler(&request, &job_manager)
+                    } else if path == "/jobs/status" {
+                        job_handlers::status_handler(&request, &job_manager)
+                    } else if path == "/jobs/result" {
+                        job_handlers::result_handler(&request, &job_manager)
+                    } else if path == "/jobs/cancel" {
+                        job_handlers::cancel_handler(&request, &job_manager)
+                    } else {
+                        Response::error(StatusCode::NotFound, "Unknown jobs endpoint")
+                    }
                 } else {
                     router.route(&request)
                 };
@@ -151,7 +173,7 @@ impl Server {
                 (response, path)
             }
             Err(e) => {
-                println!("   ❌ Parse error: {}", e);
+                println!("   âŒ Parse error: {}", e);
                 (Response::error(StatusCode::BadRequest, &format!("Invalid: {}", e)), "/error".to_string())
             }
         };
@@ -168,10 +190,10 @@ impl Server {
         let latency = start.elapsed();
         let status_code = response.status().as_u16();
         
-        // Registrar métricas
+        // Registrar mÃ©tricas
         metrics.record_request(&path, status_code, latency);
         
-        println!("   📤 {} ({:.2}ms)\n", response.status(), latency.as_secs_f64() * 1000.0);
+        println!("   ðŸ“¤ {} ({:.2}ms)\n", response.status(), latency.as_secs_f64() * 1000.0);
         
         Ok(())
     }

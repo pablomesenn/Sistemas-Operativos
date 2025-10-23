@@ -1,4 +1,5 @@
 //! # Comandos IO-bound
+//! src/commands/io_bound.rs
 //!
 //! Comandos que requieren operaciones intensivas de I/O:
 //! - /sortfile: Ordenar archivos con números

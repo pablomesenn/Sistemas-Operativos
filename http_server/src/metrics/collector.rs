@@ -1,4 +1,5 @@
 //! # Collector de Métricas
+//! src/metrics/collector.rs
 //!
 //! Recolecta y agrega métricas del servidor en tiempo real.
 

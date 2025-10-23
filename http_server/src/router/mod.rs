@@ -1,4 +1,5 @@
 //! # Sistema de Routing
+//! src/router/mod.rs
 //!
 //! Este módulo implementa el router que mapea paths HTTP a handlers específicos.
 //!

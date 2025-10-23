@@ -1,4 +1,5 @@
 //! # Construcción de Respuestas HTTP
+//! src/http/response.rs
 //!
 //! Este módulo proporciona una API para construir respuestas HTTP/1.0
 //! de forma programática y convertirlas a bytes para enviar al cliente.
