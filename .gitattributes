@@ -1,37 +1,28 @@
-# Establece el comportamiento automático para todos los archivos.
+# Configuración automática para fines de línea
 * text=auto
 
-# Para archivos de código fuente, normaliza a LF y asegura que se guarden con LF en el repo.
+# Archivos de código - forzar LF
 *.rs text eol=lf
 *.toml text eol=lf
 *.md text eol=lf
 *.json text eol=lf
 *.yml text eol=lf
 *.yaml text eol=lf
-*.sh text eol=lf
+*.js text eol=lf
+*.ts text eol=lf
+*.html text eol=lf
+*.css text eol=lf
+*.py text eol=lf
+*.java text eol=lf
+*.c text eol=lf
+*.cpp text eol=lf
+*.h text eol=lf
 
-# Para archivos binarios, no hacer ningún cambio.
+# Archivos binarios - no modificar
 *.png binary
 *.jpg binary
 *.jpeg binary
 *.gif binary
 *.ico binary
 *.pdf binary
-
-# Para scripts de Windows (batch) y PowerShell, podrías querer CRLF, pero si quieres consistencia con Linux, usa LF y deja que Git los convierta en Windows.
-# Sin embargo, ten cuidado: los scripts de Windows a veces requieren CRLF. Pero si no son específicos de Windows, mejor LF.
-# *.bat text eol=crlf
-# *.ps1 text eol=crlf
-
-# Para otros archivos de texto, normalizar a LF.
-*.txt text
-*.text text
-
-# Para archivos de C/C++ (por si acaso)
-*.c text eol=lf
-*.h text eol=lf
-*.cpp text eol=lf
-*.hpp text eol=lf
-
-# Para archivos de Python, etc.
-*.py text eol=lf
+*.zip binary
