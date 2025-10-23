@@ -16,8 +16,14 @@ use std::time::Duration;
 /// Configuración del Job Manager
 #[derive(Clone)]
 pub struct JobManagerConfig {
-    /// Capacidad máxima de cada cola
-    pub queue_capacity: usize,
+    /// Capacidad máxima de la cola CPU
+    pub cpu_queue_capacity: usize,
+    
+    /// Capacidad máxima de la cola IO
+    pub io_queue_capacity: usize,
+    
+    /// Capacidad máxima de la cola básica
+    pub basic_queue_capacity: usize,
     
     /// Timeout para jobs CPU-bound (milisegundos)
     pub cpu_timeout_ms: u64,
@@ -25,11 +31,17 @@ pub struct JobManagerConfig {
     /// Timeout para jobs IO-bound (milisegundos)
     pub io_timeout_ms: u64,
     
+    /// Timeout para jobs básicos (milisegundos)
+    pub basic_timeout_ms: u64,
+    
     /// Número de workers para CPU-bound
     pub cpu_workers: usize,
     
     /// Número de workers para IO-bound
     pub io_workers: usize,
+    
+    /// Número de workers para básicos
+    pub basic_workers: usize,
     
     /// Ruta del archivo de persistencia
     pub storage_path: String,
@@ -38,12 +50,34 @@ pub struct JobManagerConfig {
 impl Default for JobManagerConfig {
     fn default() -> Self {
         Self {
-            queue_capacity: 1000,
-            cpu_timeout_ms: 60_000,  // 60 segundos
-            io_timeout_ms: 120_000,  // 120 segundos
+            cpu_queue_capacity: 1000,
+            io_queue_capacity: 1000,
+            basic_queue_capacity: 500,
+            cpu_timeout_ms: 60_000,
+            io_timeout_ms: 120_000,
+            basic_timeout_ms: 30_000,
             cpu_workers: 4,
             io_workers: 4,
+            basic_workers: 2,
             storage_path: "./data/jobs.json".to_string(),
+        }
+    }
+}
+
+impl JobManagerConfig {
+    /// Crea una configuración desde el Config principal
+    pub fn from_config(config: &crate::config::Config) -> Self {
+        Self {
+            cpu_queue_capacity: config.cpu_queue_capacity,
+            io_queue_capacity: config.io_queue_capacity,
+            basic_queue_capacity: config.basic_queue_capacity,
+            cpu_timeout_ms: config.cpu_timeout_ms,
+            io_timeout_ms: config.io_timeout_ms,
+            basic_timeout_ms: config.basic_timeout_ms,
+            cpu_workers: config.cpu_workers,
+            io_workers: config.io_workers,
+            basic_workers: config.basic_workers,
+            storage_path: config.jobs_storage_path.clone(),
         }
     }
 }
@@ -76,9 +110,9 @@ impl JobManager {
         
         let manager = Self {
             config: config.clone(),
-            cpu_queue: JobQueue::new(config.queue_capacity),
-            io_queue: JobQueue::new(config.queue_capacity),
-            basic_queue: JobQueue::new(config.queue_capacity),
+            cpu_queue: JobQueue::new(config.cpu_queue_capacity),
+            io_queue: JobQueue::new(config.io_queue_capacity),
+            basic_queue: JobQueue::new(config.basic_queue_capacity),
             storage,
             running_jobs: Arc::new(Mutex::new(HashMap::new())),
         };
@@ -128,11 +162,11 @@ impl JobManager {
         }
         
         // Workers básicos
-        for i in 0..2 {
+        for i in 0..self.config.basic_workers {
             let queue = self.basic_queue.clone();
             let storage = self.storage.clone();
             let running = Arc::clone(&self.running_jobs);
-            let timeout_ms = self.config.cpu_timeout_ms;
+            let timeout_ms = self.config.basic_timeout_ms;
             
             thread::spawn(move || {
                 Self::worker_loop(

@@ -3,8 +3,7 @@
 //! 
 //! Punto de entrada del servidor HTTP/1.0.
 //!
-//! Por ahora usa configuración por defecto.
-//! Luego agregaremos parsing de CLI arguments.
+//! Soporta configuración via CLI arguments y variables de entorno.
 
 use http_server::config::Config;
 use http_server::server::Server;
@@ -15,14 +14,18 @@ fn main() {
     println!("  Principios de Sistemas Operativos");
     println!("=================================\n");
     
-    // Crear configuración (por defecto o desde env)
-    let config = Config::from_env();
+    // Parsear configuración desde CLI/env
+    let config = Config::new();
     
-    println!("⚙️  Configuración:");
-    println!("   Puerto: {}", config.port);
-    println!("   Host: {}", config.host);
-    println!("   Data Dir: {}", config.data_dir);
-    println!();
+    // Validar configuración
+    if let Err(e) = config.validate() {
+        eprintln!("❌ Error de configuración: {}", e);
+        eprintln!("\nUsa --help para ver las opciones disponibles");
+        std::process::exit(1);
+    }
+    
+    // Imprimir resumen de configuración
+    config.print_summary();
     
     // Crear el servidor
     let mut server = Server::new(config);

@@ -60,8 +60,9 @@ impl Server {
         
         // Nota: /metrics y /jobs/* se manejarán especialmente en handle_connection_static
         
-        // Inicializar Job Manager
-        let job_manager = JobManager::new(crate::jobs::manager::JobManagerConfig::default());
+        // Inicializar Job Manager con configuración del CLI
+        let job_manager_config = crate::jobs::manager::JobManagerConfig::from_config(&config);
+        let job_manager = JobManager::new(job_manager_config);
         
         Self {
             config,
@@ -78,7 +79,7 @@ impl Server {
         
         let listener = TcpListener::bind(&address)?;
         println!("[+] Servidor escuchando en {}", address);
-        println!("[*] Modo concurrente: un thread por conexiÃ³n\n");
+        println!("[*] Modo concurrente: un thread por conexion\n");
         
         self.listener = Some(listener);
         let listener = self.listener.as_ref().unwrap();
