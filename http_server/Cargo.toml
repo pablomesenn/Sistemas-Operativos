@@ -1,0 +1,31 @@
+[package]
+name = "http_server"
+version = "0.1.0"
+edition = "2021"
+
+# Metadata del proyecto
+authors = ["Tu Nombre <tu@email.com>"]
+description = "Servidor HTTP/1.0 concurrente para Principios de Sistemas Operativos"
+
+[dependencies]
+# Para compresión
+flate2 = "1.0"  # gzip
+# Para regex (grep)
+regex = "1.10"
+# Para hash SHA256
+sha2 = "0.10"
+
+[dev-dependencies]
+# Para pruebas (las agregaremos después)
+
+# Configuración de perfiles
+[profile.dev]
+opt-level = 0          # Sin optimizaciones en desarrollo (compila más rápido)
+
+[profile.release]
+opt-level = 3          # Máxima optimización en release
+lto = true             # Link-Time Optimization
+codegen-units = 1      # Mejor optimización (compila más lento, pero corre más rápido)
+
+[profile.test]
+opt-level = 1          # Algunas optimizaciones para que los tests corran razonablemente rápido

@@ -1,0 +1,1 @@
+hello world\nthis is a test\nerror occurred\nmore text
