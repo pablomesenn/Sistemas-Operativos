@@ -210,6 +210,7 @@ impl Clone for JobQueue {
 mod tests {
     use super::*;
     use crate::jobs::types::JobType;
+    use crate::jobs::types::JobPriority;
     
     #[test]
     fn test_queue_ordering() {

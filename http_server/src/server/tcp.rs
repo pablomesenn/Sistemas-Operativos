@@ -95,21 +95,21 @@ impl Server {
                         .map(|addr| addr.to_string())
                         .unwrap_or_else(|_| "unknown".to_string());
                     
-                    println!("ðŸ“¥ Nueva conexiÃ³n desde: {} (spawning thread)", peer_addr);
+                    println!(" ✅ Nueva conexión desde: {} (spawning thread)", peer_addr);
                     
                     // Incrementar contador de threads activos
                     metrics.increment_active_threads();
                     
                     thread::spawn(move || {
                         if let Err(e) = Self::handle_connection_static(stream, router, metrics.clone(), job_manager) {
-                            eprintln!("   âŒ Error en thread: {}", e);
+                            eprintln!("   ❌ Error en thread: {}", e);
                         }
                         // Decrementar al terminar
                         metrics.decrement_active_threads();
                     });
                 }
                 Err(e) => {
-                    eprintln!("âŒ Error al aceptar conexiÃ³n: {}", e);
+                    eprintln!("   ❌ Error al aceptar conexión: {}", e);
                 }
             }
         }
@@ -139,11 +139,11 @@ impl Server {
         let bytes_read = stream.read(&mut buffer)?;
         
         if bytes_read == 0 {
-            println!("   âš ï¸  ConexiÃ³n cerrada");
+            println!("   ✅ Conexión cerrada");
             return Ok(());
         }
         
-        println!("   ðŸ“¨ {} bytes [req_id: {}]", bytes_read, &request_id[..8]);
+        println!("   ✅ {} bytes [req_id: {}]", bytes_read, &request_id[..8]);
         
         let (response, path) = match Request::parse(&buffer[..bytes_read]) {
             Ok(request) => {
@@ -152,8 +152,26 @@ impl Server {
                 
                 // Manejar rutas especiales
                 let response = if path == "/metrics" {
-                    let json = metrics.get_metrics_json();
-                    Response::json(&json)
+                    // MEJORADO: Incluir estadísticas de colas y workers del JobManager
+                    let metrics_json = metrics.get_metrics_json();
+                    let queue_stats = job_manager.get_queue_stats();
+                    
+                    // Combinar métricas del servidor con estadísticas de jobs
+                    // Remover el último } del JSON de métricas
+                    let metrics_without_closing = metrics_json.trim_end_matches('}').trim_end();
+                    
+                    // Agregar estadísticas de jobs
+                    let combined = format!(
+                        r#"{},
+  "job_queues": {}
+}}"#,
+                        metrics_without_closing,
+                        queue_stats
+                    );
+                    
+                    Response::new(StatusCode::Ok)
+                        .with_header("Content-Type", "application/json")
+                        .with_body(&combined)
                 } else if path.starts_with("/jobs/") {
                     // Despachar a handlers de jobs
                     if path == "/jobs/submit" {
@@ -174,7 +192,7 @@ impl Server {
                 (response, path)
             }
             Err(e) => {
-                println!("   âŒ Parse error: {}", e);
+                println!("   ❌ Parse error: {}", e);
                 (Response::error(StatusCode::BadRequest, &format!("Invalid: {}", e)), "/error".to_string())
             }
         };
@@ -183,6 +201,10 @@ impl Server {
         let mut response = response;
         response.add_header("X-Request-Id", &request_id);
         response.add_header("X-Worker-Thread", &thread_id);
+
+        // NUEVO: Agregar PID del proceso actual (requerido por el proyecto)
+        let process_id = std::process::id();
+        response.add_header("X-Worker-Pid", &process_id.to_string());
         
         let response_bytes = response.to_bytes();
         stream.write_all(&response_bytes)?;
@@ -194,7 +216,7 @@ impl Server {
         // Registrar mÃ©tricas
         metrics.record_request(&path, status_code, latency);
         
-        println!("   ðŸ“¤ {} ({:.2}ms)\n", response.status(), latency.as_secs_f64() * 1000.0);
+        println!("   ✅ {} ({:.2}ms)\n", response.status(), latency.as_secs_f64() * 1000.0);
         
         Ok(())
     }

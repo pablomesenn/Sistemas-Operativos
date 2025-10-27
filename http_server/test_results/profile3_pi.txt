@@ -1,0 +1,46 @@
+This is ApacheBench, Version 2.3 <$Revision: 1903618 $>
+Copyright 1996 Adam Twiss, Zeus Technology Ltd, http://www.zeustech.net/
+Licensed to The Apache Software Foundation, http://www.apache.org/
+
+Benchmarking 127.0.0.1 (be patient).....done
+
+
+Server Software:        RedUnix-HTTP/1.0
+Server Hostname:        127.0.0.1
+Server Port:            8080
+
+Document Path:          /pi?digits=100
+Document Length:        147 bytes
+
+Concurrency Level:      20
+Time taken for tests:   0.013 seconds
+Complete requests:      100
+Failed requests:        0
+Total transferred:      35000 bytes
+HTML transferred:       14700 bytes
+Requests per second:    7534.66 [#/sec] (mean)
+Time per request:       2.654 [ms] (mean)
+Time per request:       0.133 [ms] (mean, across all concurrent requests)
+Transfer rate:          2575.32 [Kbytes/sec] received
+
+Connection Times (ms)
+              min  mean[+/-sd] median   max
+Connect:        0    0   0.1      0       0
+Processing:     0    2   0.9      3       4
+Waiting:        0    2   0.9      2       3
+Total:          1    2   0.8      3       4
+WARNING: The median and mean for the processing time are not within a normal deviation
+        These results are probably not that reliable.
+WARNING: The median and mean for the total time are not within a normal deviation
+        These results are probably not that reliable.
+
+Percentage of the requests served within a certain time (ms)
+  50%      3
+  66%      3
+  75%      3
+  80%      3
+  90%      3
+  95%      3
+  98%      4
+  99%      4
+ 100%      4 (longest request)

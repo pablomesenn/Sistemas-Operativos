@@ -650,6 +650,15 @@ pub fn loadtest_handler(req: &Request) -> Response {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::http::{Request, StatusCode};
+    
+    // Helper para crear requests de prueba
+    fn make_request(path: &str) -> Request {
+        let raw = format!("GET {} HTTP/1.0\r\n\r\n", path);
+        Request::parse(raw.as_bytes()).unwrap()
+    }
+    
+    // ==================== FIBONACCI ====================
     
     #[test]
     fn test_fibonacci_calculation() {
@@ -665,37 +674,61 @@ mod tests {
     
     #[test]
     fn test_fibonacci_handler_success() {
-        let raw = b"GET /fibonacci?num=10 HTTP/1.0\r\n\r\n";
-        let request = Request::parse(raw).unwrap();
+        let request = make_request("/fibonacci?num=10");
         let response = fibonacci_handler(&request);
         
         assert_eq!(response.status(), StatusCode::Ok);
         let body = String::from_utf8(response.body().to_vec()).unwrap();
         assert!(body.contains("55"));
+        assert!(body.contains("\"num\": 10"));
     }
     
     #[test]
     fn test_fibonacci_handler_missing_param() {
-        let raw = b"GET /fibonacci HTTP/1.0\r\n\r\n";
-        let request = Request::parse(raw).unwrap();
+        let request = make_request("/fibonacci");
         let response = fibonacci_handler(&request);
         
         assert_eq!(response.status(), StatusCode::BadRequest);
+        let body = String::from_utf8(response.body().to_vec()).unwrap();
+        assert!(body.contains("Missing required parameter"));
     }
     
     #[test]
     fn test_fibonacci_handler_invalid_param() {
-        let raw = b"GET /fibonacci?num=abc HTTP/1.0\r\n\r\n";
-        let request = Request::parse(raw).unwrap();
+        let request = make_request("/fibonacci?num=abc");
         let response = fibonacci_handler(&request);
         
         assert_eq!(response.status(), StatusCode::BadRequest);
     }
     
     #[test]
-    fn test_reverse_handler() {
-        let raw = b"GET /reverse?text=hello HTTP/1.0\r\n\r\n";
-        let request = Request::parse(raw).unwrap();
+    fn test_fibonacci_handler_too_large() {
+        let request = make_request("/fibonacci?num=100");
+        let response = fibonacci_handler(&request);
+        
+        assert_eq!(response.status(), StatusCode::BadRequest);
+        let body = String::from_utf8(response.body().to_vec()).unwrap();
+        assert!(body.contains("must be <= 90"));
+    }
+    
+    #[test]
+    fn test_fibonacci_edge_cases() {
+        let req0 = make_request("/fibonacci?num=0");
+        let resp0 = fibonacci_handler(&req0);
+        let body0 = String::from_utf8(resp0.body().to_vec()).unwrap();
+        assert!(body0.contains("\"result\": 0"));
+        
+        let req1 = make_request("/fibonacci?num=1");
+        let resp1 = fibonacci_handler(&req1);
+        let body1 = String::from_utf8(resp1.body().to_vec()).unwrap();
+        assert!(body1.contains("\"result\": 1"));
+    }
+    
+    // ==================== REVERSE ====================
+    
+    #[test]
+    fn test_reverse_handler_success() {
+        let request = make_request("/reverse?text=hello");
         let response = reverse_handler(&request);
         
         assert_eq!(response.status(), StatusCode::Ok);
@@ -704,9 +737,37 @@ mod tests {
     }
     
     #[test]
-    fn test_toupper_handler() {
-        let raw = b"GET /toupper?text=hello HTTP/1.0\r\n\r\n";
-        let request = Request::parse(raw).unwrap();
+    fn test_reverse_handler_empty_string() {
+        let request = make_request("/reverse?text=");
+        let response = reverse_handler(&request);
+        
+        assert_eq!(response.status(), StatusCode::Ok);
+        let body = String::from_utf8(response.body().to_vec()).unwrap();
+        assert!(body.contains("\"reversed\": \"\""));
+    }
+    
+    #[test]
+    fn test_reverse_handler_unicode() {
+        let request = make_request("/reverse?text=🔥rust");
+        let response = reverse_handler(&request);
+        
+        assert_eq!(response.status(), StatusCode::Ok);
+        // Unicode debería manejarse correctamente
+    }
+    
+    #[test]
+    fn test_reverse_handler_missing_param() {
+        let request = make_request("/reverse");
+        let response = reverse_handler(&request);
+        
+        assert_eq!(response.status(), StatusCode::BadRequest);
+    }
+    
+    // ==================== TOUPPER ====================
+    
+    #[test]
+    fn test_toupper_handler_success() {
+        let request = make_request("/toupper?text=hello");
         let response = toupper_handler(&request);
         
         assert_eq!(response.status(), StatusCode::Ok);
@@ -715,33 +776,315 @@ mod tests {
     }
     
     #[test]
-    fn test_status_handler() {
-        let raw = b"GET /status HTTP/1.0\r\n\r\n";
-        let request = Request::parse(raw).unwrap();
-        let response = status_handler(&request);
+    fn test_toupper_handler_already_upper() {
+        let request = make_request("/toupper?text=HELLO");
+        let response = toupper_handler(&request);
         
         assert_eq!(response.status(), StatusCode::Ok);
+        let body = String::from_utf8(response.body().to_vec()).unwrap();
+        assert!(body.contains("\"upper\": \"HELLO\""));
     }
     
     #[test]
+    fn test_toupper_handler_mixed_case() {
+        let request = make_request("/toupper?text=HeLLo");
+        let response = toupper_handler(&request);
+        
+        assert_eq!(response.status(), StatusCode::Ok);
+        let body = String::from_utf8(response.body().to_vec()).unwrap();
+        assert!(body.contains("HELLO"));
+    }
+    
+    #[test]
+    fn test_toupper_handler_missing_param() {
+        let request = make_request("/toupper");
+        let response = toupper_handler(&request);
+        
+        assert_eq!(response.status(), StatusCode::BadRequest);
+    }
+    
+    // ==================== STATUS ====================
+    
+    #[test]
+    fn test_status_handler() {
+        let request = make_request("/status");
+        let response = status_handler(&request);
+        
+        assert_eq!(response.status(), StatusCode::Ok);
+        let body = String::from_utf8(response.body().to_vec()).unwrap();
+        assert!(body.contains("running"));
+        assert!(body.contains("version"));
+    }
+    
+    // ==================== TIMESTAMP ====================
+    
+    #[test]
     fn test_timestamp_handler() {
-        let raw = b"GET /timestamp HTTP/1.0\r\n\r\n";
-        let request = Request::parse(raw).unwrap();
+        let request = make_request("/timestamp");
         let response = timestamp_handler(&request);
         
         assert_eq!(response.status(), StatusCode::Ok);
         let body = String::from_utf8(response.body().to_vec()).unwrap();
         assert!(body.contains("timestamp"));
+        
+        // Verificar que el timestamp es un número válido
+        let timestamp_str = body.split("timestamp\":").nth(1).unwrap().split('}').next().unwrap();
+        let _timestamp: u64 = timestamp_str.trim().parse().expect("Should be valid number");
     }
+    
+    // ==================== HELP ====================
     
     #[test]
     fn test_help_handler() {
-        let raw = b"GET /help HTTP/1.0\r\n\r\n";
-        let request = Request::parse(raw).unwrap();
+        let request = make_request("/help");
         let response = help_handler(&request);
         
         assert_eq!(response.status(), StatusCode::Ok);
         let body = String::from_utf8(response.body().to_vec()).unwrap();
         assert!(body.contains("commands"));
+        assert!(body.contains("fibonacci"));
+        assert!(body.contains("reverse"));
+    }
+    
+    // ==================== RANDOM ====================
+    
+    #[test]
+    fn test_random_handler_default() {
+        let request = make_request("/random");
+        let response = random_handler(&request);
+        
+        assert_eq!(response.status(), StatusCode::Ok);
+        let body = String::from_utf8(response.body().to_vec()).unwrap();
+        assert!(body.contains("values"));
+        assert!(body.contains("count"));
+    }
+    
+    #[test]
+    fn test_random_handler_with_params() {
+        let request = make_request("/random?count=5&min=10&max=20");
+        let response = random_handler(&request);
+        
+        assert_eq!(response.status(), StatusCode::Ok);
+        let body = String::from_utf8(response.body().to_vec()).unwrap();
+        assert!(body.contains("\"count\": 5"));
+        assert!(body.contains("\"min\": 10"));
+        assert!(body.contains("\"max\": 20"));
+    }
+    
+    #[test]
+    fn test_random_handler_invalid_range() {
+        let request = make_request("/random?min=100&max=10");
+        let response = random_handler(&request);
+        
+        assert_eq!(response.status(), StatusCode::BadRequest);
+    }
+    
+    #[test]
+    fn test_random_handler_large_count() {
+        let request = make_request("/random?count=2000");
+        let response = random_handler(&request);
+        
+        assert_eq!(response.status(), StatusCode::Ok);
+        let body = String::from_utf8(response.body().to_vec()).unwrap();
+        // Debe limitar a 1000
+        assert!(body.contains("\"count\": 1000"));
+    }
+    
+    // ==================== HASH ====================
+    
+    #[test]
+    fn test_hash_handler_success() {
+        let request = make_request("/hash?text=hello");
+        let response = hash_handler(&request);
+        
+        assert_eq!(response.status(), StatusCode::Ok);
+        let body = String::from_utf8(response.body().to_vec()).unwrap();
+        assert!(body.contains("hash"));
+        assert!(body.contains("algorithm"));
+    }
+    
+    #[test]
+    fn test_hash_handler_same_input_same_hash() {
+        let req1 = make_request("/hash?text=test123");
+        let resp1 = hash_handler(&req1);
+        let body1 = String::from_utf8(resp1.body().to_vec()).unwrap();
+        
+        let req2 = make_request("/hash?text=test123");
+        let resp2 = hash_handler(&req2);
+        let body2 = String::from_utf8(resp2.body().to_vec()).unwrap();
+        
+        // Mismo input debe dar mismo hash
+        assert_eq!(body1, body2);
+    }
+    
+    #[test]
+    fn test_hash_handler_missing_param() {
+        let request = make_request("/hash");
+        let response = hash_handler(&request);
+        
+        assert_eq!(response.status(), StatusCode::BadRequest);
+    }
+    
+    // ==================== SIMULATE ====================
+    
+    #[test]
+    fn test_simulate_handler_success() {
+        let request = make_request("/simulate?seconds=1");
+        let start = std::time::Instant::now();
+        let response = simulate_handler(&request);
+        let elapsed = start.elapsed();
+        
+        assert_eq!(response.status(), StatusCode::Ok);
+        let body = String::from_utf8(response.body().to_vec()).unwrap();
+        assert!(body.contains("iterations"));
+        
+        // Debe tomar aproximadamente 1 segundo
+        assert!(elapsed.as_secs() >= 1);
+        assert!(elapsed.as_secs() <= 2);
+    }
+    
+    #[test]
+    fn test_simulate_handler_with_task_name() {
+        let request = make_request("/simulate?seconds=1&task=test_task");
+        let response = simulate_handler(&request);
+        
+        assert_eq!(response.status(), StatusCode::Ok);
+        let body = String::from_utf8(response.body().to_vec()).unwrap();
+        assert!(body.contains("test_task"));
+    }
+    
+    #[test]
+    fn test_simulate_handler_invalid_seconds() {
+        let request = make_request("/simulate?seconds=100");
+        let response = simulate_handler(&request);
+        
+        assert_eq!(response.status(), StatusCode::BadRequest);
+    }
+    
+    #[test]
+    fn test_simulate_handler_missing_param() {
+        let request = make_request("/simulate");
+        let response = simulate_handler(&request);
+        
+        assert_eq!(response.status(), StatusCode::BadRequest);
+    }
+    
+    // ==================== SLEEP ====================
+    
+    #[test]
+    fn test_sleep_handler_success() {
+        let request = make_request("/sleep?seconds=1");
+        let start = std::time::Instant::now();
+        let response = sleep_handler(&request);
+        let elapsed = start.elapsed();
+        
+        assert_eq!(response.status(), StatusCode::Ok);
+        assert!(elapsed.as_secs() >= 1);
+    }
+    
+    #[test]
+    fn test_sleep_handler_invalid_seconds() {
+        let request = make_request("/sleep?seconds=20");
+        let response = sleep_handler(&request);
+        
+        assert_eq!(response.status(), StatusCode::BadRequest);
+    }
+    
+    // ==================== LOADTEST ====================
+    
+    #[test]
+    fn test_loadtest_handler_default() {
+        let request = make_request("/loadtest");
+        let response = loadtest_handler(&request);
+        
+        assert_eq!(response.status(), StatusCode::Ok);
+        let body = String::from_utf8(response.body().to_vec()).unwrap();
+        assert!(body.contains("tasks"));
+        assert!(body.contains("total_time_ms"));
+    }
+    
+    #[test]
+    fn test_loadtest_handler_with_params() {
+        let request = make_request("/loadtest?tasks=5&sleep=1");
+        let response = loadtest_handler(&request);
+        
+        assert_eq!(response.status(), StatusCode::Ok);
+        let body = String::from_utf8(response.body().to_vec()).unwrap();
+        assert!(body.contains("\"tasks\": 5"));
+    }
+    
+    // ==================== FILE OPERATIONS ====================
+    
+    #[test]
+    fn test_createfile_handler_success() {
+        let request = make_request("/createfile?name=test.txt&content=hello");
+        let response = createfile_handler(&request);
+        
+        assert_eq!(response.status(), StatusCode::Ok);
+        
+        // Limpiar
+        let _ = std::fs::remove_file("./data/test.txt");
+    }
+    
+    #[test]
+    fn test_createfile_handler_with_repeat() {
+        let request = make_request("/createfile?name=test_repeat.txt&content=x&repeat=100");
+        let response = createfile_handler(&request);
+        
+        assert_eq!(response.status(), StatusCode::Ok);
+        let body = String::from_utf8(response.body().to_vec()).unwrap();
+        assert!(body.contains("\"size\": 100"));
+        
+        // Limpiar
+        let _ = std::fs::remove_file("./data/test_repeat.txt");
+    }
+    
+    #[test]
+    fn test_createfile_handler_invalid_name() {
+        let request = make_request("/createfile?name=../etc/passwd&content=hack");
+        let response = createfile_handler(&request);
+        
+        assert_eq!(response.status(), StatusCode::BadRequest);
+        let body = String::from_utf8(response.body().to_vec()).unwrap();
+        assert!(body.contains("Invalid filename"));
+    }
+    
+    #[test]
+    fn test_createfile_handler_missing_params() {
+        let request = make_request("/createfile?name=test.txt");
+        let response = createfile_handler(&request);
+        
+        assert_eq!(response.status(), StatusCode::BadRequest);
+    }
+    
+    #[test]
+    fn test_deletefile_handler_success() {
+        // Crear archivo primero
+        std::fs::create_dir_all("./data").ok();
+        std::fs::write("./data/test_delete.txt", "test").unwrap();
+        
+        let request = make_request("/deletefile?name=test_delete.txt");
+        let response = deletefile_handler(&request);
+        
+        assert_eq!(response.status(), StatusCode::Ok);
+        
+        // Verificar que se eliminó
+        assert!(!std::path::Path::new("./data/test_delete.txt").exists());
+    }
+    
+    #[test]
+    fn test_deletefile_handler_not_found() {
+        let request = make_request("/deletefile?name=nonexistent.txt");
+        let response = deletefile_handler(&request);
+        
+        assert_eq!(response.status(), StatusCode::NotFound);
+    }
+    
+    #[test]
+    fn test_deletefile_handler_invalid_name() {
+        let request = make_request("/deletefile?name=../etc/passwd");
+        let response = deletefile_handler(&request);
+        
+        assert_eq!(response.status(), StatusCode::BadRequest);
     }
 }

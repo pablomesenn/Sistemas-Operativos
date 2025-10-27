@@ -103,6 +103,7 @@ impl MetricsCollector {
         
         // Calcular percentiles de latencia
         let (p50, p95, p99, avg) = self.calculate_percentiles(&data.latencies);
+        let stddev = self.calculate_stddev(&data.latencies, avg);
         
         // Formatear status codes
         let status_codes_json = data.status_codes.iter()
@@ -136,6 +137,7 @@ impl MetricsCollector {
     "p95": {},
     "p99": {},
     "avg": {},
+    "stddev": {:.2},
     "samples": {}
   }}
 }}"#,
@@ -146,6 +148,7 @@ impl MetricsCollector {
             status_codes_json,
             top_paths_json,
             p50, p95, p99, avg,
+            stddev,
             data.latencies.len()
         )
     }
@@ -168,6 +171,22 @@ impl MetricsCollector {
         let avg = sum / len as u64;
         
         (p50, p95, p99, avg)
+    }
+
+    // NUEVO: Calcular desviación estándar
+    fn calculate_stddev(&self, latencies: &[u64], avg: u64) -> f64 {
+        if latencies.is_empty() {
+            return 0.0;
+        }
+        
+        let variance: f64 = latencies.iter()
+            .map(|&x| {
+                let diff = x as f64 - avg as f64;
+                diff * diff
+            })
+            .sum::<f64>() / latencies.len() as f64;
+        
+        variance.sqrt()
     }
     
     /// Obtiene un snapshot de las métricas

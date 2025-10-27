@@ -178,33 +178,46 @@ impl Config {
     
     /// Imprime un resumen de la configuración
     pub fn print_summary(&self) {
-        println!("⚙️  Configuración del Servidor:");
-        println!("   📍 Dirección: {}", self.address());
-        println!("   📁 Data dir: {}", self.data_dir);
+        println!("╔══════════════════════════════════════════════════════════════╗");
+        println!("║          RedUnix HTTP/1.0 Server Configuration              ║");
+        println!("╚══════════════════════════════════════════════════════════════╝");
         println!();
-        println!("   👷 Workers:");
-        println!("      CPU-bound: {}", self.cpu_workers);
-        println!("      IO-bound:  {}", self.io_workers);
-        println!("      Básicos:   {}", self.basic_workers);
+        println!("🌐 Network:");
+        println!("   Address:      {}", self.address());
+        println!("   Data dir:     {}", self.data_dir);
+        println!("   Storage:      {}", self.jobs_storage_path);
         println!();
-        println!("   📦 Capacidad de Colas:");
-        println!("      CPU:    {}", self.cpu_queue_capacity);
-        println!("      IO:     {}", self.io_queue_capacity);
-        println!("      Básica: {}", self.basic_queue_capacity);
+        println!("👷 Worker Pools & Queues:");
+        println!("   ┌──────────────┬──────────┬────────────┬─────────────┐");
+        println!("   │ Type         │ Workers  │ Queue Cap  │ Timeout     │");
+        println!("   ├──────────────┼──────────┼────────────┼─────────────┤");
+        println!("   │ CPU-bound    │ {:^8} │ {:^10} │ {:>7} ms │", 
+            self.cpu_workers, self.cpu_queue_capacity, self.cpu_timeout_ms);
+        println!("   │ IO-bound     │ {:^8} │ {:^10} │ {:>7} ms │", 
+            self.io_workers, self.io_queue_capacity, self.io_timeout_ms);
+        println!("   │ Basic        │ {:^8} │ {:^10} │ {:>7} ms │", 
+            self.basic_workers, self.basic_queue_capacity, self.basic_timeout_ms);
+        println!("   └──────────────┴──────────┴────────────┴─────────────┘");
         println!();
-        println!("   ⏱️  Timeouts (ms):");
-        println!("      CPU:    {}", self.cpu_timeout_ms);
-        println!("      IO:     {}", self.io_timeout_ms);
-        println!("      Básico: {}", self.basic_timeout_ms);
-        println!();
-        println!("   🚦 Backpressure:");
-        println!("      Umbral:      {}%", self.backpressure_threshold);
-        println!("      Retry after: {}ms", self.retry_after_ms);
+        println!("🚦 Backpressure & Rate Limiting:");
+        println!("   Threshold:    {}% (503 when queue is {}% full)", 
+            self.backpressure_threshold, self.backpressure_threshold);
+        println!("   Retry-After:  {} ms", self.retry_after_ms);
         
         if self.rate_limit_per_sec > 0 {
-            println!();
-            println!("   🛡️  Rate Limit: {} req/sec por IP", self.rate_limit_per_sec);
+            println!("   Rate Limit:   {} req/sec per IP", self.rate_limit_per_sec);
+        } else {
+            println!("   Rate Limit:   disabled");
         }
+        
+        println!();
+        println!("🧹 Maintenance:");
+        println!("   Job cleanup:  {} seconds ({:.1} hours)", 
+            self.jobs_cleanup_age_secs,
+            self.jobs_cleanup_age_secs as f64 / 3600.0
+        );
+        println!();
+        println!("═══════════════════════════════════════════════════════════════");
         println!();
     }
 }

@@ -79,7 +79,8 @@ pub fn submit_handler(req: &Request, job_manager: &JobManager) -> Response {
                     StatusCode::ServiceUnavailable,
                     &error
                 );
-                response.add_header("Retry-After", "5"); // Reintentar en 5 segundos
+                // Agregar header Retry-After con valor en segundos
+                response.add_header("Retry-After", "5"); // 5 segundos segun el PDF
                 response
             } else {
                 Response::error(StatusCode::InternalServerError, &error)

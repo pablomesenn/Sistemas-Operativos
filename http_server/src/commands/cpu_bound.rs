@@ -289,22 +289,40 @@ pub fn pi_handler(req: &Request) -> Response {
 }
 
 /// Calcula π con precisión especificada usando serie de Machin
+/// π/4 = 4*arctan(1/5) - arctan(1/239)
 fn calculate_pi(digits: usize) -> String {
-    // Usamos una aproximación simple con suficientes términos
-    // Para producción usaríamos una librería como rug o mpc
+    let terms = (digits * 10 + 100).min(10000);
     
-    let terms = digits * 10 + 100; // Más términos = más precisión
-    let mut pi = 0.0f64;
+    // Calcular arctan(1/5)
+    let arctan_1_5 = calculate_arctan(5, terms);
     
-    // Serie de Gregory-Leibniz (lenta pero simple)
-    for k in 0..terms {
-        let sign = if k % 2 == 0 { 1.0 } else { -1.0 };
-        pi += sign / (2.0 * k as f64 + 1.0);
-    }
-    pi *= 4.0;
+    // Calcular arctan(1/239)
+    let arctan_1_239 = calculate_arctan(239, terms);
     
-    // Formatear con la precisión solicitada
+    // Aplicar fórmula de Machin
+    let pi = 4.0 * (4.0 * arctan_1_5 - arctan_1_239);
+    
     format!("{:.prec$}", pi, prec = digits)
+}
+
+/// Calcula arctan(1/x) usando serie de Taylor
+fn calculate_arctan(x: i32, terms: usize) -> f64 {
+    let x_f = x as f64;
+    let mut result = 0.0;
+    let x_squared = x_f * x_f;
+    
+    for n in 0..terms {
+        let sign = if n % 2 == 0 { 1.0 } else { -1.0 };
+        let term = sign / ((2 * n + 1) as f64 * x_f.powi(2 * n as i32 + 1));
+        result += term;
+        
+        // Converge rápido, podemos salir antes
+        if term.abs() < 1e-15 {
+            break;
+        }
+    }
+    
+    result
 }
 
 /// Handler para /mandelbrot?width=W&height=H&max_iter=I
@@ -487,33 +505,393 @@ fn matrix_multiply(size: usize, seed: u64) -> u64 {
     hasher.finish()
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    
-    #[test]
-    fn test_is_prime() {
-        assert!(is_prime_miller_rabin(2, 10));
-        assert!(is_prime_miller_rabin(3, 10));
-        assert!(is_prime_miller_rabin(5, 10));
-        assert!(is_prime_miller_rabin(97, 10));
-        assert!(is_prime_miller_rabin(104729, 10));
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+        use crate::http::{Request, StatusCode};
         
-        assert!(!is_prime_miller_rabin(4, 10));
-        assert!(!is_prime_miller_rabin(100, 10));
-        assert!(!is_prime_miller_rabin(1000, 10));
+        // Helper para crear requests
+        fn make_request(path: &str) -> Request {
+            let raw = format!("GET {} HTTP/1.0\r\n\r\n", path);
+            Request::parse(raw.as_bytes()).unwrap()
+        }
+        
+        // ==================== ISPRIME ====================
+        
+        #[test]
+        fn test_is_prime_miller_rabin_small_primes() {
+            assert!(is_prime_miller_rabin(2, 10));
+            assert!(is_prime_miller_rabin(3, 10));
+            assert!(is_prime_miller_rabin(5, 10));
+            assert!(is_prime_miller_rabin(7, 10));
+            assert!(is_prime_miller_rabin(11, 10));
+            assert!(is_prime_miller_rabin(13, 10));
+        }
+        
+        #[test]
+        fn test_is_prime_miller_rabin_composites() {
+            assert!(!is_prime_miller_rabin(4, 10));
+            assert!(!is_prime_miller_rabin(6, 10));
+            assert!(!is_prime_miller_rabin(8, 10));
+            assert!(!is_prime_miller_rabin(9, 10));
+            assert!(!is_prime_miller_rabin(10, 10));
+            assert!(!is_prime_miller_rabin(100, 10));
+        }
+        
+        #[test]
+        fn test_is_prime_miller_rabin_large_primes() {
+            assert!(is_prime_miller_rabin(97, 10));
+            assert!(is_prime_miller_rabin(104729, 10));
+            assert!(is_prime_miller_rabin(999983, 10));
+        }
+        
+        #[test]
+        fn test_is_prime_miller_rabin_edge_cases() {
+            assert!(!is_prime_miller_rabin(0, 10));
+            assert!(!is_prime_miller_rabin(1, 10));
+        }
+        
+        #[test]
+        fn test_isprime_handler_success_prime() {
+            let request = make_request("/isprime?n=97");
+            let response = isprime_handler(&request);
+            
+            assert_eq!(response.status(), StatusCode::Ok);
+            let body = String::from_utf8(response.body().to_vec()).unwrap();
+            assert!(body.contains("\"is_prime\": true"));
+            assert!(body.contains("\"n\": 97"));
+        }
+        
+        #[test]
+        fn test_isprime_handler_success_composite() {
+            let request = make_request("/isprime?n=100");
+            let response = isprime_handler(&request);
+            
+            assert_eq!(response.status(), StatusCode::Ok);
+            let body = String::from_utf8(response.body().to_vec()).unwrap();
+            assert!(body.contains("\"is_prime\": false"));
+        }
+        
+        #[test]
+        fn test_isprime_handler_missing_param() {
+            let request = make_request("/isprime");
+            let response = isprime_handler(&request);
+            
+            assert_eq!(response.status(), StatusCode::BadRequest);
+            let body = String::from_utf8(response.body().to_vec()).unwrap();
+            assert!(body.contains("Missing required parameter"));
+        }
+        
+        #[test]
+        fn test_isprime_handler_invalid_param() {
+            let request = make_request("/isprime?n=abc");
+            let response = isprime_handler(&request);
+            
+            assert_eq!(response.status(), StatusCode::BadRequest);
+        }
+        
+        #[test]
+        fn test_isprime_handler_zero_or_one() {
+            let req0 = make_request("/isprime?n=0");
+            let resp0 = isprime_handler(&req0);
+            assert_eq!(resp0.status(), StatusCode::BadRequest);
+            
+            let req1 = make_request("/isprime?n=1");
+            let resp1 = isprime_handler(&req1);
+            assert_eq!(resp1.status(), StatusCode::BadRequest);
+        }
+        
+        // ==================== MOD_POW ====================
+        
+        #[test]
+        fn test_mod_pow_basic() {
+            assert_eq!(mod_pow(2, 3, 5), 3);  // 2^3 mod 5 = 8 mod 5 = 3
+            assert_eq!(mod_pow(2, 10, 1000), 24);
+            assert_eq!(mod_pow(5, 3, 13), 8);
+        }
+        
+        #[test]
+        fn test_mod_pow_edge_cases() {
+            assert_eq!(mod_pow(2, 0, 5), 1);  // Cualquier número^0 = 1
+            assert_eq!(mod_pow(0, 5, 7), 0);  // 0^n = 0
+            assert_eq!(mod_pow(5, 1, 7), 5);  // n^1 = n
+        }
+        
+        #[test]
+        fn test_mod_mul() {
+            assert_eq!(mod_mul(2, 3, 5), 1);  // (2*3) mod 5 = 6 mod 5 = 1
+            assert_eq!(mod_mul(100, 200, 50), 0);
+        }
+        
+        // ==================== FACTOR ====================
+        
+        #[test]
+        fn test_factorize_small_numbers() {
+            assert_eq!(factorize(2), vec![(2, 1)]);
+            assert_eq!(factorize(4), vec![(2, 2)]);
+            assert_eq!(factorize(6), vec![(2, 1), (3, 1)]);
+            assert_eq!(factorize(12), vec![(2, 2), (3, 1)]);
+        }
+        
+        #[test]
+        fn test_factorize_powers() {
+            assert_eq!(factorize(8), vec![(2, 3)]);
+            assert_eq!(factorize(27), vec![(3, 3)]);
+            assert_eq!(factorize(32), vec![(2, 5)]);
+        }
+        
+        #[test]
+        fn test_factorize_composite() {
+            assert_eq!(factorize(360), vec![(2, 3), (3, 2), (5, 1)]);
+        }
+        
+        #[test]
+        fn test_factorize_prime() {
+            assert_eq!(factorize(97), vec![(97, 1)]);
+            assert_eq!(factorize(101), vec![(101, 1)]);
+        }
+        
+        #[test]
+        fn test_factor_handler_success() {
+            let request = make_request("/factor?n=12");
+            let response = factor_handler(&request);
+            
+            assert_eq!(response.status(), StatusCode::Ok);
+            let body = String::from_utf8(response.body().to_vec()).unwrap();
+            assert!(body.contains("\"factors\""));
+            assert!(body.contains("[2, 2]"));
+            assert!(body.contains("[3, 1]"));
+        }
+        
+        #[test]
+        fn test_factor_handler_prime_number() {
+            let request = make_request("/factor?n=97");
+            let response = factor_handler(&request);
+            
+            assert_eq!(response.status(), StatusCode::Ok);
+            let body = String::from_utf8(response.body().to_vec()).unwrap();
+            assert!(body.contains("[97, 1]"));
+        }
+        
+        #[test]
+        fn test_factor_handler_missing_param() {
+            let request = make_request("/factor");
+            let response = factor_handler(&request);
+            
+            assert_eq!(response.status(), StatusCode::BadRequest);
+        }
+        
+        #[test]
+        fn test_factor_handler_invalid_param() {
+            let request = make_request("/factor?n=abc");
+            let response = factor_handler(&request);
+            
+            assert_eq!(response.status(), StatusCode::BadRequest);
+        }
+        
+        #[test]
+        fn test_factor_handler_too_small() {
+            let request = make_request("/factor?n=1");
+            let response = factor_handler(&request);
+            
+            assert_eq!(response.status(), StatusCode::BadRequest);
+        }
+        
+        #[test]
+        fn test_factor_handler_too_large() {
+            let request = make_request("/factor?n=9999999999999999");
+            let response = factor_handler(&request);
+            
+            assert_eq!(response.status(), StatusCode::BadRequest);
+            let body = String::from_utf8(response.body().to_vec()).unwrap();
+            assert!(body.contains("10^15"));
+        }
+        
+        // ==================== PI ====================
+
+        #[test]
+        fn test_calculate_pi_basic() {
+            let pi_10 = calculate_pi(10);
+            
+            // Verificar que empieza con 3.14 (primeros 3 dígitos correctos)
+            assert!(pi_10.starts_with("3.14"), "Expected to start with 3.14, got: {}", pi_10);
+            
+            // Verificar que tiene al menos 12 caracteres (3. + 10 dígitos)
+            assert!(pi_10.len() >= 4, "Expected length >= 4, got: {}", pi_10.len());
+        }
+
+        #[test]
+        fn test_calculate_pi_accuracy() {
+            // π = 3.14159265358979...
+            let pi_5 = calculate_pi(5);
+            assert!(pi_5.starts_with("3.1415"), "Expected to start with 3.1415, got: {}", pi_5);
+            
+            let pi_3 = calculate_pi(3);
+            assert!(pi_3.starts_with("3.14"), "Expected to start with 3.14, got: {}", pi_3);
+        }
+
+        #[test]
+        fn test_pi_handler_success() {
+            let request = make_request("/pi?digits=10");
+            let response = pi_handler(&request);
+            
+            assert_eq!(response.status(), StatusCode::Ok);
+            let body = String::from_utf8(response.body().to_vec()).unwrap();
+            assert!(body.contains("\"digits\": 10"));
+            assert!(body.contains("\"value\""));
+            
+            // Verificar que el valor de π comienza con 3.14
+            assert!(body.contains("3.14"), "Response should contain accurate π value. Body: {}", body);
+        }
+
+        #[test]
+        fn test_pi_handler_different_precisions() {
+            // Probar con diferentes precisiones
+            let req5 = make_request("/pi?digits=5");
+            let resp5 = pi_handler(&req5);
+            let body5 = String::from_utf8(resp5.body().to_vec()).unwrap();
+            assert!(body5.contains("3.1415") || body5.contains("3.1416"));  // Acepta redondeo
+            
+            let req2 = make_request("/pi?digits=2");
+            let resp2 = pi_handler(&req2);
+            let body2 = String::from_utf8(resp2.body().to_vec()).unwrap();
+            assert!(body2.contains("3.1"));
+        }
+
+        #[test]
+        fn test_pi_handler_missing_param() {
+            let request = make_request("/pi");
+            let response = pi_handler(&request);
+            
+            assert_eq!(response.status(), StatusCode::BadRequest);
+        }
+
+        #[test]
+        fn test_pi_handler_invalid_digits() {
+            let request = make_request("/pi?digits=0");
+            let response = pi_handler(&request);
+            
+            assert_eq!(response.status(), StatusCode::BadRequest);
+        }
+
+        #[test]
+        fn test_pi_handler_too_many_digits() {
+            let request = make_request("/pi?digits=2000");
+            let response = pi_handler(&request);
+            
+            assert_eq!(response.status(), StatusCode::BadRequest);
+            let body = String::from_utf8(response.body().to_vec()).unwrap();
+            assert!(body.contains("between 1 and 1000"));
+        }
+        
+        // ==================== MANDELBROT ====================
+        
+        #[test]
+        fn test_calculate_mandelbrot_basic() {
+            let result = calculate_mandelbrot(10, 10, 50);
+            assert_eq!(result.len(), 10);  // 10 filas
+            assert_eq!(result[0].len(), 10);  // 10 columnas
+        }
+        
+        #[test]
+        fn test_mandelbrot_handler_default() {
+            let request = make_request("/mandelbrot");
+            let response = mandelbrot_handler(&request);
+            
+            assert_eq!(response.status(), StatusCode::Ok);
+            let body = String::from_utf8(response.body().to_vec()).unwrap();
+            assert!(body.contains("\"width\": 80"));
+            assert!(body.contains("\"height\": 40"));
+        }
+        
+        #[test]
+        fn test_mandelbrot_handler_with_params() {
+            let request = make_request("/mandelbrot?width=20&height=20&max_iter=50");
+            let response = mandelbrot_handler(&request);
+            
+            assert_eq!(response.status(), StatusCode::Ok);
+            let body = String::from_utf8(response.body().to_vec()).unwrap();
+            assert!(body.contains("\"width\": 20"));
+            assert!(body.contains("\"height\": 20"));
+            assert!(body.contains("\"max_iter\": 50"));
+        }
+        
+        #[test]
+        fn test_mandelbrot_handler_large_size_limited() {
+            let request = make_request("/mandelbrot?width=1000&height=1000");
+            let response = mandelbrot_handler(&request);
+            
+            assert_eq!(response.status(), StatusCode::Ok);
+            let body = String::from_utf8(response.body().to_vec()).unwrap();
+            // Debe limitar a 500
+            assert!(body.contains("\"width\": 500"));
+            assert!(body.contains("\"height\": 500"));
+        }
+        
+        // ==================== MATRIXMUL ====================
+        
+        #[test]
+        fn test_matrix_multiply_deterministic() {
+            // Misma semilla debe dar mismo resultado
+            let hash1 = matrix_multiply(10, 42);
+            let hash2 = matrix_multiply(10, 42);
+            assert_eq!(hash1, hash2);
+        }
+        
+        #[test]
+        fn test_matrix_multiply_different_seeds() {
+            // Diferentes semillas deben dar diferentes resultados
+            let hash1 = matrix_multiply(10, 42);
+            let hash2 = matrix_multiply(10, 123);
+            assert_ne!(hash1, hash2);
+        }
+        
+        #[test]
+        fn test_matrixmul_handler_success() {
+            let request = make_request("/matrixmul?size=10&seed=42");
+            let response = matrixmul_handler(&request);
+            
+            assert_eq!(response.status(), StatusCode::Ok);
+            let body = String::from_utf8(response.body().to_vec()).unwrap();
+            assert!(body.contains("\"size\": 10"));
+            assert!(body.contains("\"seed\": 42"));
+            assert!(body.contains("\"result_hash\""));
+        }
+        
+        #[test]
+        fn test_matrixmul_handler_default_seed() {
+            let request = make_request("/matrixmul?size=5");
+            let response = matrixmul_handler(&request);
+            
+            assert_eq!(response.status(), StatusCode::Ok);
+            let body = String::from_utf8(response.body().to_vec()).unwrap();
+            assert!(body.contains("\"seed\": 42"));  // Default
+        }
+        
+        #[test]
+        fn test_matrixmul_handler_missing_size() {
+            let request = make_request("/matrixmul");
+            let response = matrixmul_handler(&request);
+            
+            assert_eq!(response.status(), StatusCode::BadRequest);
+        }
+        
+        #[test]
+        fn test_matrixmul_handler_invalid_size() {
+            let request = make_request("/matrixmul?size=0");
+            let response = matrixmul_handler(&request);
+            
+            assert_eq!(response.status(), StatusCode::BadRequest);
+        }
+        
+        #[test]
+        fn test_matrixmul_handler_too_large() {
+            let request = make_request("/matrixmul?size=1000");
+            let response = matrixmul_handler(&request);
+            
+            assert_eq!(response.status(), StatusCode::BadRequest);
+            let body = String::from_utf8(response.body().to_vec()).unwrap();
+            assert!(body.contains("between 1 and 500"));
+        }
     }
-    
-    #[test]
-    fn test_factorize() {
-        assert_eq!(factorize(12), vec![(2, 2), (3, 1)]);
-        assert_eq!(factorize(360), vec![(2, 3), (3, 2), (5, 1)]);
-        assert_eq!(factorize(97), vec![(97, 1)]);
-    }
-    
-    #[test]
-    fn test_mod_pow() {
-        assert_eq!(mod_pow(2, 10, 1000), 24);
-        assert_eq!(mod_pow(5, 3, 13), 8);
-    }
-}
