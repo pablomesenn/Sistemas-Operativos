@@ -1,0 +1,5 @@
+Hello world this is a test file.
+This file contains multiple lines.
+We will use this for wordcount and grep tests.
+The quick brown fox jumps over the lazy dog.
+Testing testing one two three.

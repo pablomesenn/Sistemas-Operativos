@@ -552,11 +552,420 @@ fn hash_file_sha256(path: &str) -> std::io::Result<(String, u64)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::http::{Request, StatusCode};
+    use std::fs;
+    use std::path::Path;
+    
+    // Helper para crear requests
+    fn make_request(path: &str) -> Request {
+        let raw = format!("GET {} HTTP/1.0\r\n\r\n", path);
+        Request::parse(raw.as_bytes()).unwrap()
+    }
+    
+    // Setup: crear archivos de prueba si no existen
+    fn setup_test_files() {
+        fs::create_dir_all("./data").ok();
+        
+        // Archivo de números
+        if !Path::new("./data/test_numbers.txt").exists() {
+            let mut numbers = Vec::new();
+            for i in 1..=100 {
+                numbers.push((i * 7 % 97).to_string());
+            }
+            fs::write("./data/test_numbers.txt", numbers.join("\n")).unwrap();
+        }
+        
+        // Archivo de texto
+        if !Path::new("./data/test_text.txt").exists() {
+            fs::write("./data/test_text.txt", 
+                "Hello world\nThis is a test\nMultiple lines\n").unwrap();
+        }
+        
+        // Archivo para grep
+        if !Path::new("./data/test_grep.txt").exists() {
+            fs::write("./data/test_grep.txt",
+                "ERROR: line 1\nINFO: line 2\nERROR: line 3\nDEBUG: line 4\n").unwrap();
+        }
+        
+        // Archivo para compress
+        if !Path::new("./data/test_compress.txt").exists() {
+            let content = "test data ".repeat(100);
+            fs::write("./data/test_compress.txt", content).unwrap();
+        }
+        
+        // Archivo para hash
+        if !Path::new("./data/test_hash.txt").exists() {
+            fs::write("./data/test_hash.txt", "Hello SHA256!").unwrap();
+        }
+    }
+    
+    // ==================== HELPER FUNCTIONS ====================
+    
+    #[test]
+    fn test_read_numbers_from_file() {
+        setup_test_files();
+        
+        let numbers = read_numbers_from_file("./data/test_numbers.txt");
+        assert!(numbers.is_ok());
+        
+        let nums = numbers.unwrap();
+        assert!(!nums.is_empty());
+    }
+    
+    #[test]
+    fn test_write_numbers_to_file() {
+        setup_test_files();
+        
+        let numbers = vec![1, 2, 3, 4, 5];
+        let result = write_numbers_to_file("./data/test_write.txt", &numbers);
+        assert!(result.is_ok());
+        
+        // Verificar que se escribió correctamente
+        let content = fs::read_to_string("./data/test_write.txt").unwrap();
+        assert!(content.contains("1"));
+        assert!(content.contains("5"));
+        
+        // Limpiar
+        fs::remove_file("./data/test_write.txt").ok();
+    }
     
     #[test]
     fn test_merge_sort() {
-        let mut arr = vec![5, 2, 8, 1, 9];
+        let mut arr = vec![5, 2, 8, 1, 9, 3];
         merge_sort(&mut arr);
-        assert_eq!(arr, vec![1, 2, 5, 8, 9]);
+        assert_eq!(arr, vec![1, 2, 3, 5, 8, 9]);
+    }
+    
+    #[test]
+    fn test_merge_sort_already_sorted() {
+        let mut arr = vec![1, 2, 3, 4, 5];
+        merge_sort(&mut arr);
+        assert_eq!(arr, vec![1, 2, 3, 4, 5]);
+    }
+    
+    #[test]
+    fn test_merge_sort_reverse_sorted() {
+        let mut arr = vec![5, 4, 3, 2, 1];
+        merge_sort(&mut arr);
+        assert_eq!(arr, vec![1, 2, 3, 4, 5]);
+    }
+    
+    #[test]
+    fn test_merge_sort_single_element() {
+        let mut arr = vec![42];
+        merge_sort(&mut arr);
+        assert_eq!(arr, vec![42]);
+    }
+    
+    #[test]
+    fn test_merge_sort_empty() {
+        let mut arr: Vec<i64> = vec![];
+        merge_sort(&mut arr);
+        assert_eq!(arr, Vec::<i64>::new());
+    }
+    
+    // ==================== SORTFILE ====================
+    
+    #[test]
+    fn test_sortfile_handler_success() {
+        // Asegurar que el directorio existe
+        fs::create_dir_all("./data").expect("Failed to create ./data directory");
+        setup_test_files();
+        
+        // Verificar que el archivo existe
+        assert!(Path::new("./data/test_numbers.txt").exists(), 
+                "test_numbers.txt should exist after setup");
+        
+        let request = make_request("/sortfile?name=test_numbers.txt&algo=merge");
+        let response = sortfile_handler(&request);
+        
+        // Si falla, mostrar el body para debugging
+        if response.status() != StatusCode::Ok {
+            let body = String::from_utf8_lossy(response.body());
+            panic!("Expected Ok status, got {:?}. Body: {}", response.status(), body);
+        }
+        
+        assert_eq!(response.status(), StatusCode::Ok);
+        let body = String::from_utf8(response.body().to_vec()).unwrap();
+        assert!(body.contains("\"sorted_file\""));
+        assert!(body.contains("test_numbers.txt.sorted"));
+        
+        // Verificar que el archivo de salida fue creado
+        assert!(Path::new("./data/test_numbers.txt.sorted").exists(),
+                "Sorted file should have been created");
+        
+        // Limpiar
+        fs::remove_file("./data/test_numbers.txt.sorted").ok();
+    }
+    
+    #[test]
+    fn test_sortfile_handler_quick_algo() {
+        setup_test_files();
+        
+        let request = make_request("/sortfile?name=test_numbers.txt&algo=quick");
+        let response = sortfile_handler(&request);
+        
+        assert_eq!(response.status(), StatusCode::Ok);
+        
+        // Limpiar
+        fs::remove_file("./data/test_numbers.txt.sorted").ok();
+    }
+    
+    #[test]
+    fn test_sortfile_handler_missing_file() {
+        let request = make_request("/sortfile?name=nonexistent.txt");
+        let response = sortfile_handler(&request);
+        
+        assert_eq!(response.status(), StatusCode::NotFound);
+    }
+    
+    #[test]
+    fn test_sortfile_handler_missing_name() {
+        let request = make_request("/sortfile");
+        let response = sortfile_handler(&request);
+        
+        assert_eq!(response.status(), StatusCode::BadRequest);
+    }
+    
+    #[test]
+    fn test_sortfile_handler_invalid_algo() {
+        setup_test_files();
+        
+        let request = make_request("/sortfile?name=test_numbers.txt&algo=bubble");
+        let response = sortfile_handler(&request);
+        
+        assert_eq!(response.status(), StatusCode::BadRequest);
+    }
+    
+    #[test]
+    fn test_sortfile_handler_invalid_filename() {
+        let request = make_request("/sortfile?name=../etc/passwd");
+        let response = sortfile_handler(&request);
+        
+        assert_eq!(response.status(), StatusCode::BadRequest);
+    }
+    
+    // ==================== WORDCOUNT ====================
+    
+    #[test]
+    fn test_count_file_stats() {
+        setup_test_files();
+        
+        let stats = count_file_stats("./data/test_text.txt");
+        assert!(stats.is_ok());
+        
+        let (lines, words, bytes) = stats.unwrap();
+        assert!(lines > 0);
+        assert!(words > 0);
+        assert!(bytes > 0);
+    }
+    
+    #[test]
+    fn test_wordcount_handler_success() {
+        setup_test_files();
+        
+        let request = make_request("/wordcount?name=test_text.txt");
+        let response = wordcount_handler(&request);
+        
+        assert_eq!(response.status(), StatusCode::Ok);
+        let body = String::from_utf8(response.body().to_vec()).unwrap();
+        assert!(body.contains("\"lines\""));
+        assert!(body.contains("\"words\""));
+        assert!(body.contains("\"bytes\""));
+    }
+    
+    #[test]
+    fn test_wordcount_handler_missing_file() {
+        let request = make_request("/wordcount?name=nonexistent.txt");
+        let response = wordcount_handler(&request);
+        
+        assert_eq!(response.status(), StatusCode::NotFound);
+    }
+    
+    #[test]
+    fn test_wordcount_handler_missing_name() {
+        let request = make_request("/wordcount");
+        let response = wordcount_handler(&request);
+        
+        assert_eq!(response.status(), StatusCode::BadRequest);
+    }
+    
+    #[test]
+    fn test_wordcount_handler_invalid_filename() {
+        let request = make_request("/wordcount?name=../etc/passwd");
+        let response = wordcount_handler(&request);
+        
+        assert_eq!(response.status(), StatusCode::BadRequest);
+    }
+    
+    // ==================== GREP ====================
+    
+    #[test]
+    fn test_grep_file() {
+        setup_test_files();
+        
+        let result = grep_file("./data/test_grep.txt", "ERROR");
+        assert!(result.is_ok());
+        
+        let (count, lines) = result.unwrap();
+        assert!(count >= 2);  // Al menos 2 líneas con ERROR
+        assert!(!lines.is_empty());
+    }
+    
+    #[test]
+    fn test_grep_handler_success() {
+        setup_test_files();
+        
+        let request = make_request("/grep?name=test_grep.txt&pattern=ERROR");
+        let response = grep_handler(&request);
+        
+        assert_eq!(response.status(), StatusCode::Ok);
+        let body = String::from_utf8(response.body().to_vec()).unwrap();
+        assert!(body.contains("\"matches\""));
+        assert!(body.contains("\"sample_lines\""));
+    }
+    
+    #[test]
+    fn test_grep_handler_no_matches() {
+        setup_test_files();
+        
+        let request = make_request("/grep?name=test_grep.txt&pattern=NONEXISTENT");
+        let response = grep_handler(&request);
+        
+        assert_eq!(response.status(), StatusCode::Ok);
+        let body = String::from_utf8(response.body().to_vec()).unwrap();
+        assert!(body.contains("\"matches\": 0"));
+    }
+    
+    #[test]
+    fn test_grep_handler_missing_params() {
+        let request = make_request("/grep?name=test.txt");
+        let response = grep_handler(&request);
+        
+        assert_eq!(response.status(), StatusCode::BadRequest);
+    }
+    
+    #[test]
+    fn test_grep_handler_invalid_regex() {
+        setup_test_files();
+        
+        let request = make_request("/grep?name=test_grep.txt&pattern=[invalid");
+        let response = grep_handler(&request);
+        
+        assert_eq!(response.status(), StatusCode::InternalServerError);
+    }
+    
+    // ==================== COMPRESS ====================
+    
+    #[test]
+    fn test_compress_file_gzip() {
+        setup_test_files();
+        
+        let result = compress_file_gzip(
+            "./data/test_compress.txt",
+            "./data/test_compress.txt.gz"
+        );
+        
+        assert!(result.is_ok());
+        let (original_size, compressed_size) = result.unwrap();
+        assert!(original_size > 0);
+        assert!(compressed_size > 0);
+        assert!(compressed_size < original_size);  // Debería comprimir
+        
+        // Limpiar
+        fs::remove_file("./data/test_compress.txt.gz").ok();
+    }
+    
+    #[test]
+    fn test_compress_handler_success() {
+        setup_test_files();
+        
+        let request = make_request("/compress?name=test_compress.txt");
+        let response = compress_handler(&request);
+        
+        assert_eq!(response.status(), StatusCode::Ok);
+        let body = String::from_utf8(response.body().to_vec()).unwrap();
+        assert!(body.contains("\"output\""));
+        assert!(body.contains("\"original_size\""));
+        assert!(body.contains("\"compressed_size\""));
+        assert!(body.contains("\"ratio\""));
+        
+        // Limpiar
+        fs::remove_file("./data/test_compress.txt.gz").ok();
+    }
+    
+    #[test]
+    fn test_compress_handler_missing_file() {
+        let request = make_request("/compress?name=nonexistent.txt");
+        let response = compress_handler(&request);
+        
+        assert_eq!(response.status(), StatusCode::NotFound);
+    }
+    
+    #[test]
+    fn test_compress_handler_invalid_codec() {
+        setup_test_files();
+        
+        let request = make_request("/compress?name=test_compress.txt&codec=zip");
+        let response = compress_handler(&request);
+        
+        assert_eq!(response.status(), StatusCode::BadRequest);
+    }
+    
+    // ==================== HASHFILE ====================
+    
+    #[test]
+    fn test_hash_file_sha256() {
+        setup_test_files();
+        
+        let result = hash_file_sha256("./data/test_hash.txt");
+        assert!(result.is_ok());
+        
+        let (hash, size) = result.unwrap();
+        assert_eq!(hash.len(), 64);  // SHA256 = 64 caracteres hex
+        assert!(size > 0);
+    }
+    
+    #[test]
+    fn test_hash_file_sha256_deterministic() {
+        setup_test_files();
+        
+        // Mismo archivo debe dar mismo hash
+        let result1 = hash_file_sha256("./data/test_hash.txt").unwrap();
+        let result2 = hash_file_sha256("./data/test_hash.txt").unwrap();
+        
+        assert_eq!(result1.0, result2.0);
+    }
+    
+    #[test]
+    fn test_hashfile_handler_success() {
+        setup_test_files();
+        
+        let request = make_request("/hashfile?name=test_hash.txt");
+        let response = hashfile_handler(&request);
+        
+        assert_eq!(response.status(), StatusCode::Ok);
+        let body = String::from_utf8(response.body().to_vec()).unwrap();
+        assert!(body.contains("\"hash\""));
+        assert!(body.contains("\"size\""));
+        assert!(body.contains("\"algo\": \"sha256\""));
+    }
+    
+    #[test]
+    fn test_hashfile_handler_missing_file() {
+        let request = make_request("/hashfile?name=nonexistent.txt");
+        let response = hashfile_handler(&request);
+        
+        assert_eq!(response.status(), StatusCode::NotFound);
+    }
+    
+    #[test]
+    fn test_hashfile_handler_invalid_algo() {
+        setup_test_files();
+        
+        let request = make_request("/hashfile?name=test_hash.txt&algo=md5");
+        let response = hashfile_handler(&request);
+        
+        assert_eq!(response.status(), StatusCode::BadRequest);
     }
 }

@@ -1,0 +1,9 @@
+This is a test file for compression.
+Lorem ipsum dolor sit amet, consectetur adipiscing elit.
+Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.
+Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris.
+This line is repeated multiple times to improve compression ratio.
+This line is repeated multiple times to improve compression ratio.
+This line is repeated multiple times to improve compression ratio.
+This line is repeated multiple times to improve compression ratio.
+This line is repeated multiple times to improve compression ratio.

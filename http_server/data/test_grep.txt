@@ -1,0 +1,7 @@
+ERROR: Something went wrong
+INFO: Starting process
+ERROR: Another error occurred
+WARNING: Check this
+INFO: Process completed
+ERROR: Third error
+DEBUG: Debug information
