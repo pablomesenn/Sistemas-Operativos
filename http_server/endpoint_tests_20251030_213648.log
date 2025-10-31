@@ -1,0 +1,288 @@
+=== ENDPOINT TESTING LOG ===
+Date: Thu Oct 30 21:36:48 CST 2025
+Base URL: http://localhost:8080
+================================
+=== TEST: GET /status ===
+URL: http://localhost:8080/status
+Method: GET
+Expected: 200, Got: 200
+Response: {
+  "status": "running",
+  "version": "0.1.0",
+  "server": "RedUnix HTTP/1.0"
+}
+---
+=== TEST: GET /fibonacci?num=10 ===
+URL: http://localhost:8080/fibonacci?num=10
+Method: GET
+Expected: 200, Got: 200
+Response: {"num": 10, "result": 55}
+---
+=== TEST: GET /fibonacci?num=20 ===
+URL: http://localhost:8080/fibonacci?num=20
+Method: GET
+Expected: 200, Got: 200
+Response: {"num": 20, "result": 6765}
+---
+=== TEST: GET /reverse?text=Hello ===
+URL: http://localhost:8080/reverse?text=Hello
+Method: GET
+Expected: 200, Got: 200
+Response: {"original": "Hello", "reversed": "olleH"}
+---
+=== TEST: GET /toupper?text=hello ===
+URL: http://localhost:8080/toupper?text=hello
+Method: GET
+Expected: 200, Got: 200
+Response: {"original": "hello", "upper": "HELLO"}
+---
+=== TEST: GET /timestamp ===
+URL: http://localhost:8080/timestamp
+Method: GET
+Expected: 200, Got: 200
+Response: {"timestamp": 1761881808}
+---
+=== TEST: GET /random?min=1&max=100 ===
+URL: http://localhost:8080/random?min=1&max=100
+Method: GET
+Expected: 200, Got: 200
+Response: {"count": 1, "min": 1, "max": 100, "values": [2]}
+---
+=== TEST: GET /hash?text=password ===
+URL: http://localhost:8080/hash?text=password
+Method: GET
+Expected: 200, Got: 200
+Response: {"text": "password", "hash": "aa24901d4ff1f696", "algorithm": "simple-hash"}
+---
+=== TEST: GET /createfile?name=test1.txt&content=TestContent&repeat=10 ===
+URL: http://localhost:8080/createfile?name=test1.txt&content=TestContent&repeat=10
+Method: GET
+Expected: 200, Got: 200
+Response: {"filename": "test1.txt", "size": 110, "repeat": 10}
+---
+=== TEST: GET /deletefile?name=test1.txt ===
+URL: http://localhost:8080/deletefile?name=test1.txt
+Method: GET
+Expected: 200, Got: 200
+Response: {"filename": "test1.txt", "deleted": true}
+---
+=== TEST: GET /simulate?seconds=5 ===
+URL: http://localhost:8080/simulate?seconds=5
+Method: GET
+Expected: 200, Got: 200
+Response: {"task": "simulation", "seconds": 5, "elapsed": 7.373, "iterations": 2174241590000}
+---
+=== TEST: GET /sleep?seconds=1 ===
+URL: http://localhost:8080/sleep?seconds=1
+Method: GET
+Expected: 200, Got: 200
+Response: {"slept": 1}
+---
+=== TEST: GET /loadtest?count=5 ===
+URL: http://localhost:8080/loadtest?count=5
+Method: GET
+Expected: 200, Got: 200
+Response: {"tasks": 10, "sleep_ms": 10, "total_time_ms": 100}
+---
+=== TEST: GET /help ===
+URL: http://localhost:8080/help
+Method: GET
+Expected: 200, Got: 200
+Response: {
+  "commands": [
+    {
+      "path": "/status",
+      "description": "Server status and metrics",
+      "parameters": []
+    },
+    {
+      "path": "/fibonacci",
+      "description": "Calculate Fibonacci number",
+      "parameters": ["num (required): integer <= 90"]
+    },
+    {
+      "path": "/reverse",
+      "description": "Reverse a text string",
+      "parameters": ["text (required): string to reverse"]
+    },
+    {
+      "path": "/toupper",
+      "description": "Convert text to uppercase",
+      "parameters": ["text (required): string to convert"]
+    },
+    {
+      "path": "/timestamp",
+      "description": "Get current Unix timestamp",
+      "parameters": []
+    },
+    {
+      "path": "/random",
+      "description": "Generate random numbers",
+      "parameters": ["count (optional): number of values", "min (optional): minimum value", "max (optional): maximum value"]
+    },
+    {
+      "path": "/hash",
+      "description": "Calculate SHA256 hash of text",
+      "parameters": ["text (required): text to hash"]
+    },
+    {
+      "path": "/createfile",
+      "description": "Create a file with content",
+      "parameters": ["name (required): filename", "content (required): text content", "repeat (optional): repetitions"]
+    },
+    {
+      "path": "/deletefile",
+      "description": "Delete a file",
+      "parameters": ["name (required): filename"]
+    },
+    {
+      "path": "/simulate",
+      "description": "Simulate a task with real work",
+      "parameters": ["seconds (required): duration", "task (optional): task name"]
+    },
+    {
+      "path": "/sleep",
+      "description": "Sleep for N seconds",
+      "parameters": ["seconds (required): duration"]
+    },
+    {
+      "path": "/loadtest",
+      "description": "Generate test load",
+      "parameters": ["tasks (optional): number of tasks", "sleep (optional): sleep per task in ms"]
+    },
+    {
+      "path": "/help",
+      "description": "Show this help message",
+      "parameters": []
+    }
+  ]
+}
+---
+=== TEST: GET /isprime?n=17 ===
+URL: http://localhost:8080/isprime?n=17
+Method: GET
+Expected: 200, Got: 200
+Response: {"n": 17, "is_prime": true, "method": "miller-rabin", "elapsed_ms": 0}
+---
+=== TEST: GET /isprime?n=15485863 ===
+URL: http://localhost:8080/isprime?n=15485863
+Method: GET
+Expected: 200, Got: 200
+Response: {"n": 15485863, "is_prime": true, "method": "miller-rabin", "elapsed_ms": 0}
+---
+=== TEST: GET /factor?n=60 ===
+URL: http://localhost:8080/factor?n=60
+Method: GET
+Expected: 200, Got: 200
+Response: {"n": 60, "factors": [[2, 2], [3, 1], [5, 1]], "elapsed_ms": 0}
+---
+=== TEST: GET /pi?digits=100 ===
+URL: http://localhost:8080/pi?digits=100
+Method: GET
+Expected: 200, Got: 200
+Response: {"digits": 100, "value": "3.1415926535897940041763831686694175004959106445312500000000000000000000000000000000000000000000000000", "elapsed_ms": 0}
+---
+=== TEST: GET /mandelbrot?width=400&height=300&max_iter=50 ===
+URL: http://localhost:8080/mandelbrot?width=400&height=300&max_iter=50
+Method: GET
+Expected: 200, Got: 200
+Response: {"width": 400, "height": 300, "max_iter": 50, "sample_data": [[1,1,1,1,1,1,1,1,1,1],[1,1,1,1,1,1,1,1,1,1],[1,1,1,1,1,1,1,1,1,1],[1,1,1,1,1,1,1,1,1,1],[1,1,1,1,1,1,1,1,1,1]], "elapsed_ms": 6}
+---
+=== TEST: GET /matrixmul?size=50 ===
+URL: http://localhost:8080/matrixmul?size=50
+Method: GET
+Expected: 200, Got: 200
+Response: {"size": 50, "seed": 42, "result_hash": "74958089ab9f3ed3", "elapsed_ms": 0}
+---
+=== TEST: GET /wordcount?name=test_io.txt ===
+URL: http://localhost:8080/wordcount?name=test_io.txt
+Method: GET
+Expected: 200, Got: 200
+Response: {"file": "test_io.txt", "lines": 1, "words": 2001, "bytes": 18001, "elapsed_ms": 5}
+---
+=== TEST: GET /grep?name=test_io.txt&pattern=ERROR ===
+URL: http://localhost:8080/grep?name=test_io.txt&pattern=ERROR
+Method: GET
+Expected: 200, Got: 200
+Response: {"file": "test_io.txt", "pattern": "ERROR", "matches": 1, "sample_lines": ["Line with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0ALine with ERROR%0A"], "elapsed_ms": 4}
+---
+=== TEST: GET /hashfile?name=test_io.txt&algo=sha256 ===
+URL: http://localhost:8080/hashfile?name=test_io.txt&algo=sha256
+Method: GET
+Expected: 200, Got: 200
+Response: {"file": "test_io.txt", "algo": "sha256", "hash": "022520813e67947f67124ec6e9f97585e9122ec11020f55255d34c64df6ba161", "size": 18000, "elapsed_ms": 3}
+---
+=== TEST: GET /sortfile?name=test_io.txt ===
+URL: http://localhost:8080/sortfile?name=test_io.txt
+Method: GET
+Expected: 200, Got: 200
+Response: {"file": "test_io.txt", "algo": "merge", "sorted_file": "test_io.txt.sorted", "lines": 0, "elapsed_ms": 7}
+---
+=== TEST: GET /compress?name=test_io.txt&codec=gzip ===
+URL: http://localhost:8080/compress?name=test_io.txt&codec=gzip
+Method: GET
+Expected: 200, Got: 200
+Response: {"file": "test_io.txt", "codec": "gzip", "output": "test_io.txt.gz", "original_size": 18000, "compressed_size": 104, "ratio": 0.01, "elapsed_ms": 5}
+---
+=== TEST: GET /jobs/status?id=job-b93921272fbd25e3 ===
+URL: http://localhost:8080/jobs/status?id=job-b93921272fbd25e3
+Method: GET
+Expected: 200, Got: 200
+Response: {"status":"done","progress":100}
+---
+=== TEST: GET /jobs/result?id=job-b93921272fbd25e3 ===
+URL: http://localhost:8080/jobs/result?id=job-b93921272fbd25e3
+Method: GET
+Expected: 200, Got: 200
+Response: {"n": 982451653, "is_prime": true, "method": "miller-rabin", "elapsed_ms": 0}
+---
+=== TEST: GET /metrics ===
+URL: http://localhost:8080/metrics
+Method: GET
+Expected: 200, Got: 200
+Response: {
+  "server": {
+    "uptime_seconds": 2192,
+    "start_time": "Instant { tv_sec: 170405, tv_nsec: 487759574 }"
+  },
+  "requests": {
+    "total": 163,
+    "active_threads": 1,
+    "status_codes": {"409": 3, "400": 8, "404": 16, "200": 136},
+    "top_paths": [{"path": "/deletefile", "count": 15}, {"path": "/fibonacci", "count": 14}, {"path": "/isprime", "count": 12}, {"path": "/createfile", "count": 12}, {"path": "/status", "count": 9}, {"path": "/jobs/status", "count": 8}, {"path": "/jobs/result", "count": 6}, {"path": "/factor", "count": 6}, {"path": "/jobs/submit", "count": 6}, {"path": "/matrixmul", "count": 5}]
+  },
+  "latency_us": {
+    "p50": 185,
+    "p95": 101312,
+    "p99": 5000166,
+    "avg": 300577,
+    "stddev": 2678838.19,
+    "samples": 163
+  },
+  "job_queues": {"basic_queue":{"capacity":500,"total":0},"cpu_queue":{"capacity":1000,"high":0,"low":0,"normal":0,"total":0},"io_queue":{"capacity":1000,"high":0,"low":0,"normal":0,"total":0},"running_jobs":0}
+}
+---
+=== TEST: GET /fibonacci sin parámetros (esperado 400) ===
+URL: http://localhost:8080/fibonacci
+Method: GET
+Expected: 400, Got: 400
+Response: {"error": "Missing required parameter: num"}
+---
+=== TEST: GET /isprime con texto (esperado 400) ===
+URL: http://localhost:8080/isprime?n=abc
+Method: GET
+Expected: 400, Got: 400
+Response: {"error": "Parameter 'n' must be an integer greater than 1"}
+---
+=== TEST: GET /deletefile archivo inexistente (esperado 404) ===
+URL: http://localhost:8080/deletefile?name=nonexistent_file_12345.txt
+Method: GET
+Expected: 404, Got: 404
+Response: {"error": "File not found: nonexistent_file_12345.txt"}
+---
+=== TEST: GET /nonexistent (esperado 404) ===
+URL: http://localhost:8080/nonexistent
+Method: GET
+Expected: 404, Got: 404
+Response: {"error": "Route not found: /nonexistent"}
+---
