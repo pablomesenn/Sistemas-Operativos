@@ -298,4 +298,146 @@ mod tests {
         let response = status_handler(&request, &manager);
         assert_eq!(response.status(), StatusCode::NotFound);
     }
+
+
+        #[test]
+        fn test_submit_handler_unknown_task() {
+            let raw = b"GET /jobs/submit?task=unknown HTTP/1.0\r\n\r\n";
+            let request = Request::parse(raw).unwrap();
+    
+            let config = JobManagerConfig::default();
+            let manager = JobManager::new(config);
+    
+            let response = submit_handler(&request, &manager);
+            assert_eq!(response.status(), StatusCode::BadRequest);
+    
+            let body = String::from_utf8_lossy(response.body());
+            assert!(body.contains("Unknown task type"));
+        }
+    
+        #[test]
+        fn test_submit_handler_empty_task_value() {
+            // task presente pero vacío → debe fallar como "Unknown task type"
+            let raw = b"GET /jobs/submit?task=&prio=high HTTP/1.0\r\n\r\n";
+            let request = Request::parse(raw).unwrap();
+    
+            let config = JobManagerConfig::default();
+            let manager = JobManager::new(config);
+    
+            let response = submit_handler(&request, &manager);
+            assert_eq!(response.status(), StatusCode::BadRequest);
+    
+            let body = String::from_utf8_lossy(response.body());
+            // Dependiendo de tu implementación, el mensaje puede incluir el task vacío
+            assert!(body.contains("Unknown task type"));
+        }
+    
+        #[test]
+        fn test_status_handler_empty_id_value() {
+            // id presente pero vacío → el manager no lo encuentra → 404
+            let raw = b"GET /jobs/status?id= HTTP/1.0\r\n\r\n";
+            let request = Request::parse(raw).unwrap();
+    
+            let config = JobManagerConfig::default();
+            let manager = JobManager::new(config);
+    
+            let response = status_handler(&request, &manager);
+            assert_eq!(response.status(), StatusCode::NotFound);
+    
+            let body = String::from_utf8_lossy(response.body());
+            assert!(body.contains("Job not found"));
+        }
+    
+        #[test]
+        fn test_result_handler_missing_id() {
+            let raw = b"GET /jobs/result HTTP/1.0\r\n\r\n";
+            let request = Request::parse(raw).unwrap();
+    
+            let config = JobManagerConfig::default();
+            let manager = JobManager::new(config);
+    
+            let response = result_handler(&request, &manager);
+            assert_eq!(response.status(), StatusCode::BadRequest);
+    
+            let body = String::from_utf8_lossy(response.body());
+            assert!(body.contains("Missing required parameter: id"));
+        }
+    
+        #[test]
+        fn test_result_handler_not_found() {
+            let raw = b"GET /jobs/result?id=no_such_job HTTP/1.0\r\n\r\n";
+            let request = Request::parse(raw).unwrap();
+    
+            let config = JobManagerConfig::default();
+            let manager = JobManager::new(config);
+    
+            let response = result_handler(&request, &manager);
+            assert_eq!(response.status(), StatusCode::NotFound);
+    
+            let body = String::from_utf8_lossy(response.body());
+            assert!(body.contains("Job not found"));
+        }
+    
+        #[test]
+        fn test_cancel_handler_missing_id() {
+            let raw = b"GET /jobs/cancel HTTP/1.0\r\n\r\n";
+            let request = Request::parse(raw).unwrap();
+    
+            let config = JobManagerConfig::default();
+            let manager = JobManager::new(config);
+    
+            let response = cancel_handler(&request, &manager);
+            assert_eq!(response.status(), StatusCode::BadRequest);
+    
+            let body = String::from_utf8_lossy(response.body());
+            assert!(body.contains("Missing required parameter: id"));
+        }
+    
+        #[test]
+        fn test_cancel_handler_not_found() {
+            let raw = b"GET /jobs/cancel?id=does_not_exist HTTP/1.0\r\n\r\n";
+            let request = Request::parse(raw).unwrap();
+    
+            let config = JobManagerConfig::default();
+            let manager = JobManager::new(config);
+    
+            let response = cancel_handler(&request, &manager);
+            assert_eq!(response.status(), StatusCode::NotFound);
+    
+            let body = String::from_utf8_lossy(response.body());
+            assert!(body.contains("not found"));
+        }
+    
+        #[test]
+        fn test_submit_handler_ignores_prio_when_task_missing() {
+            // Aunque venga prio, si falta task debe ser 400 por parámetro requerido faltante
+            let raw = b"GET /jobs/submit?prio=high HTTP/1.0\r\n\r\n";
+            let request = Request::parse(raw).unwrap();
+    
+            let config = JobManagerConfig::default();
+            let manager = JobManager::new(config);
+    
+            let response = submit_handler(&request, &manager);
+            assert_eq!(response.status(), StatusCode::BadRequest);
+    
+            let body = String::from_utf8_lossy(response.body());
+            assert!(body.contains("Missing required parameter: task"));
+        }
+    
+        #[test]
+        fn test_submit_handler_ignores_unrelated_params_when_task_missing() {
+            // Si faltó task, da igual que vengan otros params: debe ser 400
+            let raw = b"GET /jobs/submit?foo=bar&n=123 HTTP/1.0\r\n\r\n";
+            let request = Request::parse(raw).unwrap();
+    
+            let config = JobManagerConfig::default();
+            let manager = JobManager::new(config);
+    
+            let response = submit_handler(&request, &manager);
+            assert_eq!(response.status(), StatusCode::BadRequest);
+    
+            let body = String::from_utf8_lossy(response.body());
+            assert!(body.contains("Missing required parameter: task"));
+        }
+    
 }

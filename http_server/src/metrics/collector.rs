@@ -255,4 +255,112 @@ mod tests {
         assert!(snapshot.latency_p95_us > snapshot.latency_p50_us);
         assert!(snapshot.latency_p99_us > snapshot.latency_p95_us);
     }
+
+    #[test]
+    fn test_multiple_status_codes() {
+        let collector = MetricsCollector::new();
+        
+        collector.record_request("/test1", 200, Duration::from_millis(10));
+        collector.record_request("/test2", 200, Duration::from_millis(20));
+        collector.record_request("/test3", 404, Duration::from_millis(5));
+        collector.record_request("/test4", 500, Duration::from_millis(15));
+        
+        let snapshot = collector.get_snapshot();
+        assert_eq!(snapshot.total_requests, 4);
+    }
+    
+    #[test]
+    fn test_active_threads_tracking() {
+        let collector = MetricsCollector::new();
+        
+        assert_eq!(collector.active_threads(), 0);
+        
+        collector.increment_active_threads();
+        assert_eq!(collector.active_threads(), 1);
+        
+        collector.increment_active_threads();
+        assert_eq!(collector.active_threads(), 2);
+        
+        collector.decrement_active_threads();
+        assert_eq!(collector.active_threads(), 1);
+        
+        collector.decrement_active_threads();
+        assert_eq!(collector.active_threads(), 0);
+    }
+    
+    #[test]
+    fn test_active_threads_no_negative() {
+        let collector = MetricsCollector::new();
+        
+        collector.decrement_active_threads();
+        collector.decrement_active_threads();
+        
+        assert_eq!(collector.active_threads(), 0);
+    }
+    
+    #[test]
+    fn test_latency_calculations() {
+        let collector = MetricsCollector::new();
+        
+        collector.record_request("/test", 200, Duration::from_millis(100));
+        collector.record_request("/test", 200, Duration::from_millis(200));
+        collector.record_request("/test", 200, Duration::from_millis(150));
+        
+        let snapshot = collector.get_snapshot();
+        assert!(snapshot.latency_avg_us > 0);
+        assert!(snapshot.latency_p50_us > 0);
+        assert!(snapshot.latency_p99_us > 0);
+        assert!(snapshot.latency_p99_us >= snapshot.latency_p50_us);
+    }
+    
+    #[test]
+    fn test_json_format() {
+        let collector = MetricsCollector::new();
+        collector.record_request("/test", 200, Duration::from_millis(50));
+        
+        let json = collector.get_metrics_json();
+        // Verificar que sea JSON válido y contenga datos
+        assert!(json.len() > 10);
+        assert!(json.contains("{"));
+        assert!(json.contains("}"));
+        // Verificar campos de latencia
+        assert!(json.contains("latency") || json.contains("p50") || json.contains("requests"));
+    }
+    
+    #[test]
+    fn test_uptime_increases() {
+        let collector = MetricsCollector::new();
+        
+        let snapshot1 = collector.get_snapshot();
+        std::thread::sleep(Duration::from_millis(100));
+        let snapshot2 = collector.get_snapshot();
+        
+        assert!(snapshot2.uptime_secs >= snapshot1.uptime_secs);
+    }
+    
+    #[test]
+    fn test_requests_per_path() {
+        let collector = MetricsCollector::new();
+        
+        collector.record_request("/fibonacci", 200, Duration::from_millis(10));
+        collector.record_request("/fibonacci", 200, Duration::from_millis(15));
+        collector.record_request("/status", 200, Duration::from_millis(5));
+        
+        let json = collector.get_metrics_json();
+        assert!(json.contains("fibonacci"));
+        assert!(json.contains("status"));
+    }
+    
+    #[test]
+    fn test_latency_window_management() {
+        let collector = MetricsCollector::new();
+        
+        // Agregar muchas latencias
+        for i in 0..15000 {
+            collector.record_request("/test", 200, Duration::from_micros(i));
+        }
+        
+        let snapshot = collector.get_snapshot();
+        assert!(snapshot.total_requests == 15000);
+    }
 }

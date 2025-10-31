@@ -257,6 +257,8 @@ mod tests {
         assert_eq!(config.port, 8080);
         assert_eq!(config.host, "127.0.0.1");
         assert_eq!(config.cpu_workers, 4);
+        assert_eq!(config.io_workers, 4);
+        assert_eq!(config.basic_workers, 2);
     }
     
     #[test]
@@ -266,22 +268,236 @@ mod tests {
     }
     
     #[test]
+    fn test_address_custom() {
+        let mut config = Config::default();
+        config.host = "0.0.0.0".to_string();
+        config.port = 3000;
+        assert_eq!(config.address(), "0.0.0.0:3000");
+    }
+    
+    #[test]
     fn test_validate_success() {
         let config = Config::default();
         assert!(config.validate().is_ok());
     }
     
+    // ==================== Workers Validation ====================
+    
     #[test]
-    fn test_validate_invalid_workers() {
+    fn test_validate_invalid_cpu_workers() {
         let mut config = Config::default();
         config.cpu_workers = 0;
-        assert!(config.validate().is_err());
+        let result = config.validate();
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("CPU workers"));
     }
+    
+    #[test]
+    fn test_validate_invalid_io_workers() {
+        let mut config = Config::default();
+        config.io_workers = 0;
+        let result = config.validate();
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("IO workers"));
+    }
+    
+    #[test]
+    fn test_validate_invalid_basic_workers() {
+        let mut config = Config::default();
+        config.basic_workers = 0;
+        let result = config.validate();
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Basic workers"));
+    }
+    
+    // ==================== Queue Capacity Validation ====================
+    
+    #[test]
+    fn test_validate_invalid_cpu_queue_capacity() {
+        let mut config = Config::default();
+        config.cpu_queue_capacity = 0;
+        let result = config.validate();
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("CPU queue"));
+    }
+    
+    #[test]
+    fn test_validate_invalid_io_queue_capacity() {
+        let mut config = Config::default();
+        config.io_queue_capacity = 0;
+        let result = config.validate();
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("IO queue"));
+    }
+    
+    // ==================== Timeout Validation ====================
+    
+    #[test]
+    fn test_validate_invalid_cpu_timeout() {
+        let mut config = Config::default();
+        config.cpu_timeout_ms = 0;
+        let result = config.validate();
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("CPU timeout"));
+    }
+    
+    #[test]
+    fn test_validate_invalid_io_timeout() {
+        let mut config = Config::default();
+        config.io_timeout_ms = 0;
+        let result = config.validate();
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("IO timeout"));
+    }
+    
+    // ==================== Backpressure Validation ====================
     
     #[test]
     fn test_validate_invalid_backpressure() {
         let mut config = Config::default();
         config.backpressure_threshold = 150;
-        assert!(config.validate().is_err());
+        let result = config.validate();
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Backpressure threshold"));
+    }
+    
+    #[test]
+    fn test_validate_backpressure_max_value() {
+        let mut config = Config::default();
+        config.backpressure_threshold = 100;
+        assert!(config.validate().is_ok());
+    }
+    
+    #[test]
+    fn test_validate_backpressure_min_value() {
+        let mut config = Config::default();
+        config.backpressure_threshold = 0;
+        assert!(config.validate().is_ok());
+    }
+    
+    // ==================== Custom Values ====================
+    
+    #[test]
+    fn test_config_custom_values() {
+        let mut config = Config::default();
+        config.port = 3000;
+        config.host = "0.0.0.0".to_string();
+        config.cpu_workers = 8;
+        config.io_workers = 6;
+        config.basic_workers = 3;
+        config.cpu_queue_capacity = 2000;
+        config.io_queue_capacity = 1500;
+        
+        assert_eq!(config.port, 3000);
+        assert_eq!(config.host, "0.0.0.0");
+        assert_eq!(config.cpu_workers, 8);
+        assert_eq!(config.io_workers, 6);
+        assert_eq!(config.basic_workers, 3);
+        assert!(config.validate().is_ok());
+    }
+    
+    #[test]
+    fn test_config_data_dir() {
+        let mut config = Config::default();
+        config.data_dir = "/custom/path".to_string();
+        assert_eq!(config.data_dir, "/custom/path");
+    }
+    
+    #[test]
+    fn test_config_storage_path() {
+        let mut config = Config::default();
+        config.jobs_storage_path = "/custom/jobs.json".to_string();
+        assert_eq!(config.jobs_storage_path, "/custom/jobs.json");
+    }
+    
+    // ==================== Print Summary ====================
+    
+    #[test]
+    fn test_config_print_summary() {
+        let config = Config::default();
+        // Should not panic
+        config.print_summary();
+    }
+    
+    #[test]
+    fn test_config_print_summary_custom() {
+        let mut config = Config::default();
+        config.port = 9000;
+        config.cpu_workers = 8;
+        config.rate_limit_per_sec = 100;
+        // Should not panic
+        config.print_summary();
+    }
+    
+    // ==================== Rate Limiting ====================
+    
+    #[test]
+    fn test_config_rate_limit_disabled() {
+        let config = Config::default();
+        assert_eq!(config.rate_limit_per_sec, 0);
+    }
+    
+    #[test]
+    fn test_config_rate_limit_enabled() {
+        let mut config = Config::default();
+        config.rate_limit_per_sec = 100;
+        assert_eq!(config.rate_limit_per_sec, 100);
+    }
+    
+    // ==================== Timeouts ====================
+    
+    #[test]
+    fn test_config_default_timeouts() {
+        let config = Config::default();
+        assert_eq!(config.cpu_timeout_ms, 60_000);
+        assert_eq!(config.io_timeout_ms, 120_000);
+        assert_eq!(config.basic_timeout_ms, 30_000);
+    }
+    
+    #[test]
+    fn test_config_custom_timeouts() {
+        let mut config = Config::default();
+        config.cpu_timeout_ms = 120_000;
+        config.io_timeout_ms = 240_000;
+        config.basic_timeout_ms = 60_000;
+        
+        assert_eq!(config.cpu_timeout_ms, 120_000);
+        assert_eq!(config.io_timeout_ms, 240_000);
+        assert_eq!(config.basic_timeout_ms, 60_000);
+        assert!(config.validate().is_ok());
+    }
+    
+    // ==================== Queue Capacities ====================
+    
+    #[test]
+    fn test_config_default_queue_capacities() {
+        let config = Config::default();
+        assert_eq!(config.cpu_queue_capacity, 1000);
+        assert_eq!(config.io_queue_capacity, 1000);
+        assert_eq!(config.basic_queue_capacity, 500);
+    }
+    
+    // ==================== Cleanup ====================
+    
+    #[test]
+    fn test_config_default_cleanup_age() {
+        let config = Config::default();
+        assert_eq!(config.jobs_cleanup_age_secs, 3600);
+    }
+    
+    #[test]
+    fn test_config_custom_cleanup_age() {
+        let mut config = Config::default();
+        config.jobs_cleanup_age_secs = 7200;
+        assert_eq!(config.jobs_cleanup_age_secs, 7200);
+    }
+    
+    // ==================== Backpressure and Retry ====================
+    
+    #[test]
+    fn test_config_default_backpressure_settings() {
+        let config = Config::default();
+        assert_eq!(config.backpressure_threshold, 90);
+        assert_eq!(config.retry_after_ms, 5_000);
     }
 }

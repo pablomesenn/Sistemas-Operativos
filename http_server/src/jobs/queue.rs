@@ -301,4 +301,131 @@ mod tests {
         assert!(removed.is_some());
         assert_eq!(queue.len(), 0);
     }
+
+    #[test]
+    fn test_queue_is_empty() {
+        let queue = JobQueue::new(10);
+        assert!(queue.is_empty());
+        
+        let job = JobMetadata::new(
+            "test".to_string(),
+            JobType::IsPrime,
+            "{}".to_string(),
+            JobPriority::Normal,
+        );
+        
+        queue.enqueue(job).unwrap();
+        assert!(!queue.is_empty());
+    }
+    
+    #[test]
+    fn test_queue_is_full() {
+        let queue = JobQueue::new(2);
+        assert!(!queue.is_full());
+        
+        for i in 0..2 {
+            let job = JobMetadata::new(
+                format!("job-{}", i),
+                JobType::IsPrime,
+                "{}".to_string(),
+                JobPriority::Normal,
+            );
+            queue.enqueue(job).unwrap();
+        }
+        
+        assert!(queue.is_full());
+    }
+    
+    #[test]
+    fn test_queue_fifo_same_priority() {
+        let queue = JobQueue::new(10);
+        
+        // Encolar varios con la misma prioridad
+        for i in 0..5 {
+            let job = JobMetadata::new(
+                format!("job-{}", i),
+                JobType::IsPrime,
+                "{}".to_string(),
+                JobPriority::Normal,
+            );
+            queue.enqueue(job).unwrap();
+        }
+        
+        // Deben salir en orden FIFO
+        let first = queue.try_dequeue().unwrap();
+        assert_eq!(first.id, "job-0");
+    }
+    
+    #[test]
+    fn test_queue_len() {
+        let queue = JobQueue::new(10);
+        assert_eq!(queue.len(), 0);
+        
+        for i in 0..3 {
+            let job = JobMetadata::new(
+                format!("job-{}", i),
+                JobType::IsPrime,
+                "{}".to_string(),
+                JobPriority::Normal,
+            );
+            queue.enqueue(job).unwrap();
+        }
+        
+        assert_eq!(queue.len(), 3);
+        
+        queue.try_dequeue().unwrap();
+        assert_eq!(queue.len(), 2);
+    }
+    
+    #[test]
+    fn test_queue_remove_reduces_size() {
+        let queue = JobQueue::new(10);
+        
+        for i in 0..5 {
+            let job = JobMetadata::new(
+                format!("job-{}", i),
+                JobType::IsPrime,
+                "{}".to_string(),
+                JobPriority::Normal,
+            );
+            queue.enqueue(job).unwrap();
+        }
+        
+        assert_eq!(queue.len(), 5);
+        
+        // Remover uno por ID
+        queue.remove_by_id("job-2");
+        assert_eq!(queue.len(), 4);
+    }
+    
+    #[test]
+    fn test_queue_mixed_priorities() {
+        let queue = JobQueue::new(10);
+        
+        // Mezclar prioridades
+        let priorities = vec![
+            JobPriority::Low,
+            JobPriority::High,
+            JobPriority::Normal,
+            JobPriority::High,
+            JobPriority::Low,
+        ];
+        
+        for (i, prio) in priorities.iter().enumerate() {
+            let job = JobMetadata::new(
+                format!("job-{}", i),
+                JobType::IsPrime,
+                "{}".to_string(),
+                *prio,
+            );
+            queue.enqueue(job).unwrap();
+        }
+        
+        // Primero deben salir los HIGH
+        let first = queue.try_dequeue().unwrap();
+        assert_eq!(first.priority, JobPriority::High);
+        
+        let second = queue.try_dequeue().unwrap();
+        assert_eq!(second.priority, JobPriority::High);
+    }
 }

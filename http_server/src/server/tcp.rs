@@ -223,12 +223,185 @@ impl Server {
 }
 
 #[cfg(test)]
-mod tests {
+mod more_server_tests {
     use super::*;
-    
+    use std::net::{TcpListener, TcpStream};
+    use std::thread;
+    use std::io::{Read, Write};
+    use std::time::Duration;
+
+    fn ephemeral_listener() -> TcpListener {
+        TcpListener::bind("127.0.0.1:0").expect("bind")
+    }
+
     #[test]
-    fn test_server_creation() {
-        let config = Config::default();
-        let _server = Server::new(config);
+    fn test_handle_connection_help_ok() {
+        let listener = ephemeral_listener();
+        let addr = listener.local_addr().unwrap();
+
+        let router = Arc::new({
+            let mut r = Router::new();
+            r.register("/help", commands::help_handler);
+            r
+        });
+
+        let metrics = Arc::new(MetricsCollector::new());
+        let job_manager = Arc::new(JobManager::new(crate::jobs::manager::JobManagerConfig::from_config(&Config::default())));
+
+        // Servidor: aceptar y procesar una conexión
+        let t = thread::spawn({
+            let router = Arc::clone(&router);
+            let metrics = Arc::clone(&metrics);
+            let job_manager = Arc::clone(&job_manager);
+            move || {
+                let (mut stream, _) = listener.accept().unwrap();
+                Server::handle_connection_static(stream.try_clone().unwrap(), router, metrics, job_manager).unwrap();
+            }
+        });
+
+        // Cliente: enviar GET /help
+        let mut client = TcpStream::connect(addr).unwrap();
+        client.write_all(b"GET /help HTTP/1.0\r\n\r\n").unwrap();
+        client.shutdown(std::net::Shutdown::Write).unwrap();
+
+        let mut buf = Vec::new();
+        client.read_to_end(&mut buf).unwrap();
+        let text = String::from_utf8_lossy(&buf);
+
+        assert!(text.contains("200 OK"));
+        assert!(text.contains("X-Request-Id:"));
+        assert!(text.contains("X-Worker-Thread:"));
+        assert!(text.contains("X-Worker-Pid:"));
+
+        t.join().unwrap();
+    }
+
+    #[test]
+    fn test_handle_connection_metrics_ok() {
+        let listener = ephemeral_listener();
+        let addr = listener.local_addr().unwrap();
+
+        let mut router = Router::new();
+        // (no importa registrar nada, vamos a /metrics)
+        let router = Arc::new(router);
+        let metrics = Arc::new(MetricsCollector::new());
+        let job_manager = Arc::new(JobManager::new(crate::jobs::manager::JobManagerConfig::from_config(&Config::default())));
+
+        let t = thread::spawn({
+            let router = Arc::clone(&router);
+            let metrics = Arc::clone(&metrics);
+            let job_manager = Arc::clone(&job_manager);
+            move || {
+                let (mut stream, _) = listener.accept().unwrap();
+                Server::handle_connection_static(stream.try_clone().unwrap(), router, metrics, job_manager).unwrap();
+            }
+        });
+
+        let mut client = TcpStream::connect(addr).unwrap();
+        client.write_all(b"GET /metrics HTTP/1.0\r\n\r\n").unwrap();
+        client.shutdown(std::net::Shutdown::Write).unwrap();
+
+        let mut buf = Vec::new();
+        client.read_to_end(&mut buf).unwrap();
+        let text = String::from_utf8_lossy(&buf);
+
+        assert!(text.contains("200 OK"));
+        assert!(text.contains("\"job_queues\"")); // se unió con get_queue_stats()
+
+        t.join().unwrap();
+    }
+
+    #[test]
+    fn test_handle_connection_jobs_unknown_endpoint() {
+        let listener = ephemeral_listener();
+        let addr = listener.local_addr().unwrap();
+
+        let router = Arc::new(Router::new());
+        let metrics = Arc::new(MetricsCollector::new());
+        let job_manager = Arc::new(JobManager::new(crate::jobs::manager::JobManagerConfig::from_config(&Config::default())));
+
+        let t = thread::spawn({
+            let router = Arc::clone(&router);
+            let metrics = Arc::clone(&metrics);
+            let job_manager = Arc::clone(&job_manager);
+            move || {
+                let (mut stream, _) = listener.accept().unwrap();
+                Server::handle_connection_static(stream.try_clone().unwrap(), router, metrics, job_manager).unwrap();
+            }
+        });
+
+        let mut client = TcpStream::connect(addr).unwrap();
+        client.write_all(b"GET /jobs/unknown HTTP/1.0\r\n\r\n").unwrap();
+        client.shutdown(std::net::Shutdown::Write).unwrap();
+
+        let mut buf = Vec::new();
+        client.read_to_end(&mut buf).unwrap();
+        let text = String::from_utf8_lossy(&buf);
+
+        assert!(text.contains("404 Not Found"));
+        assert!(text.contains("Unknown jobs endpoint"));
+
+        t.join().unwrap();
+    }
+
+    #[test]
+    fn test_handle_connection_parse_error() {
+        let listener = ephemeral_listener();
+        let addr = listener.local_addr().unwrap();
+
+        let router = Arc::new(Router::new());
+        let metrics = Arc::new(MetricsCollector::new());
+        let job_manager = Arc::new(JobManager::new(crate::jobs::manager::JobManagerConfig::from_config(&Config::default())));
+
+        let t = thread::spawn({
+            let router = Arc::clone(&router);
+            let metrics = Arc::clone(&metrics);
+            let job_manager = Arc::clone(&job_manager);
+            move || {
+                let (mut stream, _) = listener.accept().unwrap();
+                Server::handle_connection_static(stream.try_clone().unwrap(), router, metrics, job_manager).unwrap();
+            }
+        });
+
+        // Enviar bytes no-HTTP para disparar error de parseo
+        let mut client = TcpStream::connect(addr).unwrap();
+        client.write_all(b"\x00\x01\x02\x03garbage").unwrap();
+        client.shutdown(std::net::Shutdown::Write).unwrap();
+
+        let mut buf = Vec::new();
+        client.read_to_end(&mut buf).unwrap();
+        let text = String::from_utf8_lossy(&buf);
+
+        assert!(text.contains("400 Bad Request"));
+        assert!(text.contains("Invalid:"));
+
+        t.join().unwrap();
+    }
+
+    #[test]
+    fn test_handle_connection_peer_closed_immediately() {
+        // Cubre rama bytes_read == 0
+        let listener = ephemeral_listener();
+        let addr = listener.local_addr().unwrap();
+
+        let router = Arc::new(Router::new());
+        let metrics = Arc::new(MetricsCollector::new());
+        let job_manager = Arc::new(JobManager::new(crate::jobs::manager::JobManagerConfig::from_config(&Config::default())));
+
+        let t = thread::spawn({
+            let router = Arc::clone(&router);
+            let metrics = Arc::clone(&metrics);
+            let job_manager = Arc::clone(&job_manager);
+            move || {
+                let (mut stream, _) = listener.accept().unwrap();
+                // No se envía nada desde el peer: el read retorna 0 y la función debe terminar Ok(())
+                Server::handle_connection_static(stream, router, metrics, job_manager).unwrap();
+            }
+        });
+
+        // Cliente que conecta y cierra inmediatamente sin mandar datos
+        drop(TcpStream::connect(addr).unwrap());
+
+        t.join().unwrap();
     }
 }

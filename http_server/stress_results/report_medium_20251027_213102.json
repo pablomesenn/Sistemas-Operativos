@@ -1,0 +1,89 @@
+{
+  "profile": "medium",
+  "timestamp": "2025-10-27T21:31:02-06:00",
+  "config": {
+    "server": "http://localhost:8080",
+    "clients": 50,
+    "total_requests": 500,
+    "requests_per_client": 10,
+    "duration_seconds": 2
+  },
+  "results": {
+    "requests": {
+      "total": 500,
+      "successful": 382,
+      "failed": 118,
+      "success_rate": 76.4000
+    },
+    "throughput": {
+      "requests_per_second": 250.00
+    },
+    "latency_ms": {
+      "min": 12,
+      "mean": 56,
+      "p50": 12,
+      "p95": 12
+13
+14
+14
+14
+14
+15
+15
+15
+16,
+      "p99": 12
+13
+14
+14
+14
+14
+15
+15
+15
+16
+16
+16
+16
+16
+16
+17
+17
+17
+17
+18
+18
+18
+18
+18
+19
+19
+20
+20
+20
+20
+21
+21
+21
+21
+21
+21
+22
+22
+22
+22
+22
+22
+22
+23
+23
+23
+23
+23
+23
+23,
+      "max": 185
+    }
+  },
+  "log_file": "./stress_results/stress_medium_20251027_213100.log"
+}

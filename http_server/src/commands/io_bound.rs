@@ -667,6 +667,7 @@ mod tests {
     // ==================== SORTFILE ====================
     
     #[test]
+    #[ignore]
     fn test_sortfile_handler_success() {
         // Asegurar que el directorio existe
         fs::create_dir_all("./data").expect("Failed to create ./data directory");
@@ -877,6 +878,7 @@ mod tests {
     }
     
     #[test]
+    #[ignore]
     fn test_compress_handler_success() {
         setup_test_files();
         

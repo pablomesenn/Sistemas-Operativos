@@ -1,0 +1,16 @@
+{
+  "job-finished": {
+    "id": "job-finished",
+    "job_type": "isprime",
+    "status": "done",
+    "priority": "normal",
+    "params": "{}",
+    "created_at": 1761875904,
+    "started_at": null,
+    "finished_at": 1761875904,
+    "progress": 100,
+    "eta_ms": null,
+    "result": "{\"ok\":true}",
+    "error": null
+  }
+}

@@ -474,3 +474,170 @@ impl Clone for JobManager {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::jobs::types::JobStatus;
+    use std::fs;
+    use std::path::PathBuf;
+
+    /// Crea un JobManager SIN workers y con storage en un path temporal,
+    /// asegurando que el directorio padre exista para evitar "No such file or directory".
+    fn manager_with_zero_workers() -> JobManager {
+        let mut cfg = JobManagerConfig::default();
+        cfg.cpu_workers = 0;
+        cfg.io_workers = 0;
+        cfg.basic_workers = 0;
+
+        // Construir ruta: <tmp>/http_server_tests/<pid>/jobs.json
+        let mut base = std::env::temp_dir();
+        base.push("http_server_tests");
+        base.push(format!("pid-{}", std::process::id()));
+        fs::create_dir_all(&base).expect("create temp storage dir");
+
+        let storage_path: PathBuf = base.join("jobs.json");
+        cfg.storage_path = storage_path.to_string_lossy().to_string();
+
+        JobManager::new(cfg)
+    }
+
+    #[test]
+    fn test_json_to_query_string_basic() {
+        let v = serde_json::json!({"n":97, "verbose": true, "label":"X"});
+        let qs = JobManager::json_to_query_string(&v);
+        // El orden puede variar; validemos presencia
+        assert!(qs.contains("n=97"));
+        assert!(qs.contains("verbose=true"));
+        assert!(qs.contains("label=X"));
+    }
+
+    #[test]
+    fn test_job_type_to_path_mapping() {
+        assert_eq!(JobManager::job_type_to_path(&JobType::IsPrime), "isprime");
+        assert_eq!(JobManager::job_type_to_path(&JobType::Factor), "factor");
+        assert_eq!(JobManager::job_type_to_path(&JobType::Pi), "pi");
+        assert_eq!(JobManager::job_type_to_path(&JobType::Mandelbrot), "mandelbrot");
+        assert_eq!(JobManager::job_type_to_path(&JobType::MatrixMul), "matrixmul");
+        assert_eq!(JobManager::job_type_to_path(&JobType::SortFile), "sortfile");
+        assert_eq!(JobManager::job_type_to_path(&JobType::WordCount), "wordcount");
+        assert_eq!(JobManager::job_type_to_path(&JobType::Grep), "grep");
+        assert_eq!(JobManager::job_type_to_path(&JobType::Compress), "compress");
+        assert_eq!(JobManager::job_type_to_path(&JobType::HashFile), "hashfile");
+        assert_eq!(JobManager::job_type_to_path(&JobType::Fibonacci), "fibonacci");
+        assert_eq!(JobManager::job_type_to_path(&JobType::Simulate), "simulate");
+    }
+
+    #[test]
+    fn test_dispatch_command_basic_route() {
+        let req = Request::parse(b"GET /isprime?n=97 HTTP/1.0\r\n\r\n").unwrap();
+        let resp = JobManager::dispatch_command(&JobType::IsPrime, &req);
+        // No asumimos contenido exacto, pero debe ser HTTP válido
+        assert!(resp.status().as_u16() >= 200);
+    }
+
+    #[test]
+    fn test_submit_and_get_status_flow() {
+        let mgr = manager_with_zero_workers();
+
+        // submit_job
+        let params = serde_json::json!({"n":97}).to_string();
+        let job_id = mgr.submit_job(JobType::IsPrime, params, JobPriority::Normal)
+            .expect("submit should succeed");
+
+        // get_job_status (persistido)
+        let md = mgr.get_job_status(&job_id).expect("status exists after submit");
+        assert_eq!(md.id, job_id);
+        assert_eq!(md.status, JobStatus::Queued);
+    }
+
+    #[test]
+    fn test_cancel_job_when_queued() {
+        let mgr = manager_with_zero_workers();
+
+        let params = serde_json::json!({"n":97}).to_string();
+        let job_id = mgr.submit_job(JobType::IsPrime, params, JobPriority::Low)
+            .expect("submit ok");
+
+        // cancelar
+        mgr.cancel_job(&job_id).expect("cancel queued ok");
+
+        // verificar storage
+        let md = mgr.get_job_status(&job_id).expect("exists");
+        assert_eq!(md.status, JobStatus::Canceled);
+    }
+
+    #[test]
+    fn test_cancel_job_not_found() {
+        let mgr = manager_with_zero_workers();
+        let err = mgr.cancel_job("job-no-such").unwrap_err();
+        assert!(err.contains("not found"));
+    }
+
+    #[test]
+    fn test_cancel_job_finished_conflict() {
+        let mgr = manager_with_zero_workers();
+
+        // Creamos un job terminado manualmente en storage para cubrir rama "already finished"
+        let mut md = JobMetadata::new("job-finished".into(), JobType::IsPrime, "{}".into(), JobPriority::Normal);
+        md.mark_done(r#"{"ok":true}"#.into());
+        mgr.storage.save(&md).unwrap();
+
+        let err = mgr.cancel_job("job-finished").unwrap_err();
+        assert!(err.contains("already finished"));
+    }
+
+    #[test]
+    fn test_cancel_job_running_conflict() {
+        let mgr = manager_with_zero_workers();
+
+        // Simular running metiéndolo en el mapa running_jobs
+        let job_id = "job-running-sim".to_string();
+        {
+            let mut running = mgr.running_jobs.lock().unwrap();
+            running.insert(job_id.clone(), ());
+        }
+        let err = mgr.cancel_job(&job_id).unwrap_err();
+        assert!(err.contains("cannot be canceled") || err.contains("currently running"));
+    }
+
+    #[test]
+    fn test_execute_job_ok_isprime() {
+        // cubrir execute_job camino feliz
+        let params = serde_json::json!({"n":97}).to_string();
+        let md = JobMetadata::new("job-x".into(), JobType::IsPrime, params, JobPriority::Normal);
+
+        let body = JobManager::execute_job(&md, 2_000).expect("should finish well");
+        // No asumimos JSON exacto, pero debe contener algo
+        assert!(!body.is_empty());
+    }
+
+    #[test]
+    fn test_execute_job_timeout_simulate() {
+        // cubrir timeout en execute_job usando Simulate con retardo
+        let params = serde_json::json!({"ms":100}).to_string();
+        let md = JobMetadata::new("job-slow".into(), JobType::Simulate, params, JobPriority::Normal);
+
+        let err = JobManager::execute_job(&md, 1).unwrap_err();
+        assert!(err.to_lowercase().contains("timeout"));
+    }
+
+    #[test]
+    fn test_generate_job_id_is_uniqueish() {
+        let mgr = manager_with_zero_workers();
+        let a = mgr.generate_job_id();
+        let b = mgr.generate_job_id();
+        assert!(a.starts_with("job-") && b.starts_with("job-"));
+        assert_ne!(a, b);
+    }
+
+    #[test]
+    fn test_get_queue_stats_json_shape() {
+        let mgr = manager_with_zero_workers();
+        let v = mgr.get_queue_stats();
+        assert!(v.get("cpu_queue").is_some());
+        assert!(v.get("io_queue").is_some());
+        assert!(v.get("basic_queue").is_some());
+        assert!(v.get("running_jobs").is_some());
+    }
+}
