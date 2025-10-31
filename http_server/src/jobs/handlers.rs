@@ -25,19 +25,92 @@ use crate::jobs::types::{JobType, JobPriority};
 /// {"job_id": "job-abc123", "status": "queued"}
 /// ```
 pub fn submit_handler(req: &Request, job_manager: &JobManager) -> Response {
-    // Obtener el task
-    let task = match req.query_param("task") {
-        Some(t) => t,
-        None => {
+    use crate::http::request::Method;
+    
+    let (task, priority, params_json) = match req.method() {
+        Method::GET => {
+            // GET: usar query parameters
+            let task = match req.query_param("task") {
+                Some(t) => t.to_string(),
+                None => {
+                    return Response::error(
+                        StatusCode::BadRequest,
+                        "Missing required parameter: task"
+                    );
+                }
+            };
+            
+            let priority = req.query_param("prio")
+                .and_then(|p| JobPriority::from_str(p))
+                .unwrap_or(JobPriority::Normal);
+            
+            let mut params_map = std::collections::HashMap::new();
+            for (key, value) in req.query_params() {
+                if key != "task" && key != "prio" {
+                    params_map.insert(key.clone(), value.clone());
+                }
+            }
+            
+            let params_json = serde_json::to_string(&params_map)
+                .unwrap_or_else(|_| "{}".to_string());
+            
+            (task, priority, params_json)
+        }
+        Method::POST => {
+            // POST: parsear JSON del body
+            let body_str = match req.body_string() {
+                Some(s) => s,
+                None => {
+                    return Response::error(
+                        StatusCode::BadRequest,
+                        "Invalid UTF-8 in request body"
+                    );
+                }
+            };
+            
+            let json: serde_json::Value = match serde_json::from_str(&body_str) {
+                Ok(v) => v,
+                Err(_) => {
+                    return Response::error(
+                        StatusCode::BadRequest,
+                        "Invalid JSON in request body"
+                    );
+                }
+            };
+            
+            let task = match json.get("command").or_else(|| json.get("task")) {
+                Some(serde_json::Value::String(t)) => t.clone(),
+                _ => {
+                    return Response::error(
+                        StatusCode::BadRequest,
+                        "Missing required field: command or task"
+                    );
+                }
+            };
+            
+            let priority = json.get("priority").or_else(|| json.get("prio"))
+                .and_then(|v| v.as_str())
+                .and_then(|s| JobPriority::from_str(s))
+                .unwrap_or(JobPriority::Normal);
+            
+            let params_json = match json.get("params") {
+                Some(params) => serde_json::to_string(params)
+                    .unwrap_or_else(|_| "{}".to_string()),
+                None => "{}".to_string(),
+            };
+            
+            (task, priority, params_json)
+        }
+        _ => {
             return Response::error(
                 StatusCode::BadRequest,
-                "Missing required parameter: task"
+                "Method not allowed. Use GET or POST"
             );
         }
     };
     
-    // Parsear JobType
-    let job_type = match JobType::from_task_name(task) {
+    // Resto igual...
+    let job_type = match JobType::from_task_name(&task) {
         Some(jt) => jt,
         None => {
             return Response::error(
@@ -47,23 +120,6 @@ pub fn submit_handler(req: &Request, job_manager: &JobManager) -> Response {
         }
     };
     
-    // Obtener prioridad (opcional)
-    let priority = req.query_param("prio")
-        .and_then(|p| JobPriority::from_str(p))
-        .unwrap_or(JobPriority::Normal);
-    
-    // Construir JSON con los parámetros (excepto task y prio)
-    let mut params_map = std::collections::HashMap::new();
-    for (key, value) in req.query_params() {
-        if key != "task" && key != "prio" {
-            params_map.insert(key.clone(), value.clone());
-        }
-    }
-    
-    let params_json = serde_json::to_string(&params_map)
-        .unwrap_or_else(|_| "{}".to_string());
-    
-    // Encolar el job
     match job_manager.submit_job(job_type, params_json, priority) {
         Ok(job_id) => {
             let body = format!(
@@ -73,14 +129,12 @@ pub fn submit_handler(req: &Request, job_manager: &JobManager) -> Response {
             Response::json(&body)
         }
         Err(error) => {
-            // Si la cola está llena, retornar 503
             if error.contains("full") {
                 let mut response = Response::error(
                     StatusCode::ServiceUnavailable,
                     &error
                 );
-                // Agregar header Retry-After con valor en segundos
-                response.add_header("Retry-After", "5"); // 5 segundos segun el PDF
+                response.add_header("Retry-After", "5");
                 response
             } else {
                 Response::error(StatusCode::InternalServerError, &error)

@@ -29,6 +29,9 @@ pub enum Method {
     
     /// HEAD - Como GET pero solo retorna headers (opcional en el proyecto)
     HEAD,
+
+    /// POST - Enviar datos a un recurso
+    POST,
 }
 
 impl Method {
@@ -41,6 +44,7 @@ impl Method {
         match s {
             "GET" => Ok(Method::GET),
             "HEAD" => Ok(Method::HEAD),
+            "POST" => Ok(Method::POST),
             _ => Err(ParseError::UnsupportedMethod(s.to_string())),
         }
     }
@@ -50,6 +54,7 @@ impl Method {
         match self {
             Method::GET => "GET",
             Method::HEAD => "HEAD",
+            Method::POST => "POST",
         }
     }
 }
@@ -57,7 +62,7 @@ impl Method {
 /// Representa un request HTTP/1.0 parseado
 #[derive(Debug, Clone)]
 pub struct Request {
-    /// Método HTTP (GET, HEAD)
+    /// Método HTTP (GET, HEAD, POST)
     method: Method,
     
     /// Path de la petición (ej: "/fibonacci")
@@ -71,6 +76,9 @@ pub struct Request {
     
     /// Versión HTTP (debe ser "HTTP/1.0")
     version: String,
+    
+    /// Body del request para métodos POST
+    body: Vec<u8>,
 }
 
 /// Errores que pueden ocurrir durante el parsing
@@ -154,13 +162,17 @@ impl Request {
         
         // 2. Parsear headers (resto de líneas hasta encontrar línea vacía)
         let headers = Self::parse_headers(&lines[1..])?;
-        
+
+        // 3. Parsear body
+        let body = Self::parse_body(&lines, method);
+
         Ok(Request {
             method,
             path,
             query_params,
             headers,
             version,
+            body,
         })
     }
     
@@ -247,7 +259,7 @@ impl Request {
         s.replace("%20", " ")
             .replace("+", " ")
     }
-    
+
     /// Parsea los headers HTTP
     /// 
     /// Cada header tiene formato: "Name: Value"
@@ -272,6 +284,28 @@ impl Request {
         }
         
         Ok(headers)
+    }
+
+    /// Parsea el cuerpo del request
+    fn parse_body(lines: &[&str], method: Method) -> Vec<u8> {
+        if method != Method::POST {
+            return Vec::new();
+        }
+        
+        let mut body_start = 0;
+        for (i, line) in lines.iter().enumerate() {
+            if line.trim().is_empty() {
+                body_start = i + 1;
+                break;
+            }
+        }
+        
+        if body_start < lines.len() {
+            let body_str = lines[body_start..].join("\r\n");
+            body_str.as_bytes().to_vec()
+        } else {
+            Vec::new()
+        }
     }
     
     // === Métodos públicos para acceder a los campos ===
@@ -320,6 +354,16 @@ impl Request {
     /// Obtiene la versión HTTP
     pub fn version(&self) -> &str {
         &self.version
+    }
+    
+    /// Obtiene el body del request
+    pub fn body(&self) -> &[u8] {
+        &self.body
+    }
+
+    /// Obtiene el body del request como String
+    pub fn body_string(&self) -> Option<String> {
+        String::from_utf8(self.body.clone()).ok()
     }
 }
 
